@@ -26,6 +26,8 @@ model User {
   // 关联
   meetingParticipants MeetingParticipant[]
   projectMembers      ProjectMember[]
+  projects            Project[]          @relation("ProjectManager")
+  organizedMeetings   Meeting[]          @relation("MeetingOrganizer")
 }
 
 // ==================== 会议模块 ====================
@@ -41,7 +43,7 @@ model Meeting {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  organizer   User                 @relation(fields: [organizerId], references: [id])
+  organizer   User                 @relation("MeetingOrganizer", fields: [organizerId], references: [id])
   participants MeetingParticipant[]
 }
 
@@ -147,7 +149,7 @@ model Project {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  manager   User?            @relation(fields: [managerId], references: [id])
+  manager   User?            @relation("ProjectManager", fields: [managerId], references: [id])
   members   ProjectMember[]
   documents ProjectDocument[]
 }
