@@ -49,6 +49,25 @@ export class DistributionService {
     });
   }
 
+  async batchCreateInventory(items: CreateInventoryDto[]) {
+    return this.prisma.$transaction(
+      items.map(dto =>
+        this.prisma.nickelInventory.create({
+          data: {
+            batchNo: dto.batchNo,
+            weight: dto.weight,
+            pieceCount: dto.pieceCount,
+            grade: dto.grade,
+            specification: dto.specification,
+            location: dto.location || '',
+            nickelContent: dto.nickelContent || 0,
+            status: 'available',
+          },
+        })
+      )
+    );
+  }
+
   async deleteInventory(id: number) {
     const inventory = await this.prisma.nickelInventory.findUnique({
       where: { id },

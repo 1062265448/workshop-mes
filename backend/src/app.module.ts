@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { DistributionModule } from './distribution/distribution.module';
+import { CommonModule } from './common/common.module';
 
 @Module({
   imports: [
@@ -8,6 +9,7 @@ import { DistributionModule } from './distribution/distribution.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    CommonModule,
     DistributionModule,
   ],
   controllers: [],

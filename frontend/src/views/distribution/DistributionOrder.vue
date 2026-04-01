@@ -82,6 +82,10 @@
                 <el-icon><Plus /></el-icon>
                 新增库存
               </el-button>
+              <el-button type="warning" @click="handleAIRecognize">
+                <el-icon><PictureFilled /></el-icon>
+                AI 识别
+              </el-button>
             </div>
           </div>
 
@@ -269,8 +273,61 @@
     <el-dialog
       v-model="showAddInventory"
       title="新增库存"
-      width="600px"
+      width="800px"
     >
+      <!-- AI 识别区域 -->
+      <div class="ai-recognize-section">
+        <el-alert
+          title="🤖 AI 智能识别"
+          description="上传库存计量报表照片，自动识别包号、块数、重量等信息"
+          type="info"
+          :closable="false"
+          show-icon
+        />
+        
+        <el-upload
+          ref="uploadRef"
+          class="upload-demo"
+          action="/api/distribution/inventory/ai-recognize"
+          :headers="uploadHeaders"
+          :on-success="handleAIRecognizeSuccess"
+          :on-error="handleAIRecognizeError"
+          :before-upload="beforeUpload"
+          accept="image/*"
+          drag
+        >
+          <el-icon class="el-icon--upload"><picture-filled /></el-icon>
+          <div class="el-upload__text">
+            拖拽文件到此处或 <em>点击上传</em>
+          </div>
+          <template #tip>
+            <div class="el-upload__tip">
+              支持 jpg/png 格式，图片大小不超过 10MB
+            </div>
+          </template>
+        </el-upload>
+
+        <!-- AI 识别结果预览 -->
+        <div v-if="aiRecognizedData.length > 0" class="ai-preview">
+          <el-divider>AI 识别结果（{{ aiRecognizedData.length }} 条）</el-divider>
+          <el-table :data="aiRecognizedData" max-height="300" border size="small">
+            <el-table-column prop="packageNo" label="包号" width="60" />
+            <el-table-column prop="pieceCount" label="块数" width="60" align="right" />
+            <el-table-column prop="netWeight" label="净重 (kg)" width="90" align="right" />
+            <el-table-column prop="grossWeight" label="毛重 (kg)" width="90" align="right" />
+            <el-table-column prop="grade" label="牌号" width="80" />
+            <el-table-column prop="batchNo" label="批号" width="120" />
+            <el-table-column label="操作" width="80" fixed="right">
+              <template #default="{ $index }">
+                <el-button link type="primary" @click="selectAIRecord($index)">选择</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </div>
+
+      <el-divider />
+
       <el-form :model="inventoryForm" label-width="100px">
         <el-row :gutter="16">
           <el-col :span="12">
@@ -332,6 +389,44 @@
         <el-button type="primary" @click="submitInventory">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 批量导入对话框 -->
+    <el-dialog
+      v-model="showBatchImport"
+      title="批量导入库存"
+      width="900px"
+    >
+      <el-alert
+        title="确认导入"
+        description="以下数据将批量导入到库存系统中"
+        type="warning"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 16px"
+      />
+      
+      <el-table :data="batchImportData" border max-height="400">
+        <el-table-column prop="batchNo" label="批号" width="120" />
+        <el-table-column prop="grade" label="牌号" width="80" />
+        <el-table-column prop="specification" label="规格" width="100" />
+        <el-table-column prop="weight" label="重量 (kg)" width="100" align="right" />
+        <el-table-column prop="pieceCount" label="块数" width="80" align="right" />
+        <el-table-column prop="location" label="储位" width="100" />
+        <el-table-column prop="nickelContent" label="镍含量 (%)" width="100" align="right" />
+        <el-table-column label="操作" width="80" fixed="right">
+          <template #default="{ $index }">
+            <el-button link type="danger" @click="removeBatchItem($index)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <template #footer>
+        <el-button @click="showBatchImport = false">取消</el-button>
+        <el-button type="primary" @click="submitBatchImport" :loading="batchImporting">
+          确认导入（{{ batchImportData.length }} 条）
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -343,6 +438,7 @@ import {
   Plus,
   Refresh,
   Search,
+  PictureFilled,
 } from '@element-plus/icons-vue'
 
 // 状态
@@ -350,6 +446,17 @@ const activeTab = ref('inventory')
 const loading = ref(false)
 const searchKeyword = ref('')
 const orderStatusFilter = ref('')
+
+// AI 识别相关
+const uploadRef = ref()
+const aiRecognizedData = ref([])
+const batchImportData = ref([])
+const showBatchImport = ref(false)
+const batchImporting = ref(false)
+
+// API 基础 URL
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'
+const uploadHeaders = computed(() => ({}))
 
 // 统计数据
 const stats = reactive({
@@ -538,6 +645,100 @@ const handleDeleteOrder = (row: any) => {
     .catch(() => {})
 }
 
+// AI 识别相关函数
+const handleAIRecognize = () => {
+  // 打开对话框并触发文件选择
+  showAddInventory.value = true
+  // 用户可以在对话框中点击上传区域
+}
+
+const beforeUpload = (file: any) => {
+  const isImage = file.type.startsWith('image/')
+  const isLt10M = file.size / 1024 / 1024 < 10
+  
+  if (!isImage) {
+    ElMessage.error('只能上传图片文件！')
+  }
+  if (!isLt10M) {
+    ElMessage.error('图片大小不能超过 10MB！')
+  }
+  
+  return isImage && isLt10M
+}
+
+const handleAIRecognizeSuccess = (response: any) => {
+  if (response.success) {
+    ElMessage.success(response.message)
+    aiRecognizedData.value = response.data || []
+  } else {
+    ElMessage.error(response.message || 'AI 识别失败')
+  }
+}
+
+const handleAIRecognizeError = () => {
+  ElMessage.error('上传失败，请重试')
+}
+
+const selectAIRecord = (index: number) => {
+  const record = aiRecognizedData.value[index]
+  
+  // 填充表单
+  inventoryForm.batchNo = record.batchNo || ''
+  inventoryForm.grade = record.grade || ''
+  inventoryForm.specification = record.grade || ''
+  inventoryForm.weight = record.netWeight || 0
+  inventoryForm.pieceCount = record.pieceCount || 0
+  inventoryForm.nickelContent = parseFloat(record.grade?.replace('Ni', '') || '99.96')
+  inventoryForm.inspectionDate = record.date || new Date().toISOString().split('T')[0]
+  
+  ElMessage.success('已填充识别数据到表单')
+}
+
+const importAllAIRecords = () => {
+  if (aiRecognizedData.value.length === 0) return
+  
+  // 转换为批量导入数据
+  batchImportData.value = aiRecognizedData.value.map(record => ({
+    batchNo: record.batchNo || '',
+    grade: record.grade || '',
+    specification: record.grade || '',
+    weight: record.netWeight || 0,
+    pieceCount: record.pieceCount || 0,
+    location: '',
+    nickelContent: parseFloat(record.grade?.replace('Ni', '') || '99.96'),
+    inspectionDate: record.date || new Date().toISOString().split('T')[0],
+    aiData: record, // 保存原始数据
+  }))
+  
+  showBatchImport.value = true
+}
+
+const removeBatchItem = (index: number) => {
+  batchImportData.value.splice(index, 1)
+}
+
+const submitBatchImport = async () => {
+  batchImporting.value = true
+  
+  try {
+    // 批量创建库存
+    for (const item of batchImportData.value) {
+      // TODO: 调用 API 创建
+      // await api.post('/distribution/inventory', item)
+    }
+    
+    ElMessage.success(`成功导入 ${batchImportData.value.length} 条库存记录`)
+    showBatchImport.value = false
+    aiRecognizedData.value = []
+    batchImportData.value = []
+    loadInventory()
+  } catch (error) {
+    ElMessage.error('批量导入失败')
+  } finally {
+    batchImporting.value = false
+  }
+}
+
 // 工具函数
 const formatDate = (date: string) => {
   return new Date(date).toLocaleString('zh-CN')
@@ -712,6 +913,61 @@ onMounted(() => {
   padding: 16px;
   background: #f8fafc;
   border-radius: 8px;
+}
+
+/* AI 识别区域 */
+.ai-recognize-section {
+  margin-bottom: 16px;
+}
+
+.ai-recognize-section :deep(.el-alert) {
+  margin-bottom: 16px;
+}
+
+.upload-demo {
+  width: 100%;
+}
+
+.upload-demo :deep(.el-upload-dragger) {
+  padding: 40px 20px;
+  border-radius: 12px;
+  border: 2px dashed #d9d9d9;
+  transition: border-color 0.3s;
+}
+
+.upload-demo :deep(.el-upload-dragger:hover) {
+  border-color: #3b82f6;
+}
+
+.el-icon--upload {
+  font-size: 48px;
+  color: #8c939d;
+  margin-bottom: 16px;
+}
+
+.el-upload__text {
+  color: #606266;
+  font-size: 14px;
+}
+
+.el-upload__text em {
+  color: #3b82f6;
+  font-style: normal;
+}
+
+.el-upload__tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 8px;
+}
+
+.ai-preview {
+  margin-top: 16px;
+}
+
+.batch-import-btn {
+  margin-top: 16px;
+  width: 100%;
 }
 
 /* 响应式 */

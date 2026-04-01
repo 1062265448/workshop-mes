@@ -9,15 +9,32 @@ import {
   ParseIntPipe,
   Patch,
   Logger,
+  UseInterceptors,
+  UploadedFile,
+  Res,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import { mkdirSync } from 'fs';
 import { DistributionService } from './distribution.service';
 import { CreateInventoryDto, CreateOrderDto } from './dto/create-inventory.dto';
+import { QwenAIService } from '../common/services/qwen-ai.service';
 
 @Controller('distribution')
 export class DistributionController {
   private readonly logger = new Logger(DistributionController.name);
+  private readonly uploadDir = './uploads/inventory';
 
-  constructor(private readonly distributionService: DistributionService) {}
+  constructor(
+    private readonly distributionService: DistributionService,
+    private readonly qwenAI: QwenAIService,
+  ) {
+    // 确保上传目录存在
+    try {
+      mkdirSync(this.uploadDir, { recursive: true });
+    } catch (e) {}
+  }
 
   // ==================== 库存管理 ====================
 
@@ -33,6 +50,61 @@ export class DistributionController {
   @Post('inventory')
   async createInventory(@Body() dto: CreateInventoryDto) {
     return this.distributionService.createInventory(dto);
+  }
+
+  @Post('inventory/batch')
+  async batchCreateInventory(@Body() items: CreateInventoryDto[]) {
+    return this.distributionService.batchCreateInventory(items);
+  }
+
+  @Post('inventory/ai-recognize')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: diskStorage({
+        destination: this.uploadDir,
+        filename: (req, file, cb) => {
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+          cb(null, 'inventory-' + uniqueSuffix + extname(file.originalname));
+        },
+      }),
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB
+      },
+      fileFilter: (req, file, cb) => {
+        if (file.mimetype.startsWith('image/')) {
+          cb(null, true);
+        } else {
+          cb(new Error('只支持图片文件（JPG/PNG/GIF）'), false);
+        }
+      },
+    }),
+  )
+  async recognizeInventory(@UploadedFile() file: any) {
+    try {
+      this.logger.log(`📷 收到库存照片：${file.originalname}`);
+      this.logger.log(`🤖 正在调用千问 AI 识别...`);
+
+      const filePath = file.path;
+      const aiResult = await this.qwenAI.identifyInventoryTable(filePath);
+
+      this.logger.log(`✅ AI 识别成功，识别到 ${aiResult.length} 条记录`);
+
+      return {
+        success: true,
+        message: `AI 识别成功，共 ${aiResult.length} 条记录`,
+        imageUrl: `/uploads/inventory/${file.filename}`,
+        filename: file.originalname,
+        size: file.size,
+        data: aiResult,
+      };
+    } catch (error: any) {
+      this.logger.error(`❌ AI 识别失败：${error.message}`);
+      return {
+        success: false,
+        error: error.message,
+        message: 'AI 识别失败，请手动录入',
+      };
+    }
   }
 
   @Delete('inventory/:id')
