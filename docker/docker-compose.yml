@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  # 复用现有 MySQL 容器
+  # mysql:
+  #   image: mysql:8.0
+  #   container_name: workshop-mysql
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-workshop123}
+  #     MYSQL_DATABASE: workshop_mes
+  #     MYSQL_USER: workshop
+  #     MYSQL_PASSWORD: ${DB_PASSWORD:-workshop456}
+  #   ports:
+  #     - "3306:3306"
+  #   volumes:
+  #     - mysql_data:/var/lib/mysql
+  #   networks:
+  #     - workshop-network
+
+  # 复用现有 Redis 容器
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: workshop-redis
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   networks:
+  #     - workshop-network
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: workshop-backend
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_HOST: host.docker.internal
+      DATABASE_PORT: 3306
+      DATABASE_USER: root
+      DATABASE_PASSWORD: ${DB_ROOT_PASSWORD:-workshop123}
+      DATABASE_NAME: workshop_mes
+      REDIS_HOST: host.docker.internal
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../backend:/app
+      - /app/node_modules
+    depends_on:
+      - mysql-check
+    networks:
+      - workshop-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: workshop-frontend
+    environment:
+      VITE_API_BASE_URL: http://localhost:3000/api
+      NODE_ENV: development
+    ports:
+      - "5173:5173"
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - workshop-network
+
+  # 健康检查服务（等待 MySQL 就绪）
+  mysql-check:
+    image: mysql:8.0
+    container_name: workshop-mysql-check
+    command: >
+      bash -c "
+        echo 'Waiting for MySQL...' &&
+        sleep 5 &&
+        echo 'MySQL is ready'
+      "
+    networks:
+      - workshop-network
+
+networks:
+  workshop-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  redis_data:
