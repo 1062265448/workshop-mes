@@ -51,7 +51,7 @@ const routes = [
       {
         path: 'distribution',
         name: 'Distribution',
-        component: () => import('@/views/Placeholder.vue'),
+        component: () => import('@/views/distribution/DistributionOrder.vue'),
         meta: { title: '平面库配货' },
       },
       {

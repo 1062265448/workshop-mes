@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { DistributionModule } from './distribution/distribution.module';
 
 @Module({
   imports: [
@@ -7,18 +8,7 @@ import { ConfigModule } from '@nestjs/config';
       isGlobal: true,
       envFilePath: '.env',
     }),
-    // 后续添加的模块：
-    // TypeOrmModule.forRootAsync(...),
-    // AuthModule,
-    // UserModule,
-    // MeetingModule,
-    // SafetyModule,
-    // ProductionModule,
-    // ProjectModule,
-    // DefectTypesModule,
-    // DistributionModule,
-    // UploadModule,
-    // LlmModule (可选),
+    DistributionModule,
   ],
   controllers: [],
   providers: [],
