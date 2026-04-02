@@ -705,29 +705,27 @@ const handleDeleteInventory = async (row: any) => {
     // TODO: 调用 API 删除
     // await api.delete(`/distribution/inventory/${row.id}`)
     
-    // 从列表中移除
-    const index = inventoryList.value.findIndex(item => item.id === row.id)
+    // 从列表中移除（使用 tankNo 匹配，避免 ID 冲突）
+    const tankNo = row.tankNo || row.batchNo
+    const index = inventoryList.value.findIndex(item => 
+      (item.tankNo || item.batchNo) === tankNo
+    )
     if (index !== -1) {
       inventoryList.value.splice(index, 1)
     }
     
+    // 刷新统计
+    stats.totalInventory = inventoryList.value.length
+    stats.availableInventory = inventoryList.value.filter((i: any) => i.status === 'available').length
+    
     ElMessage.success('删除成功')
-    loadInventory()
+    // 延迟刷新以模拟 API 调用
+    setTimeout(() => loadInventory(), 500)
   } catch (error: any) {
     if (error !== 'cancel') {
       ElMessage.error('删除失败')
     }
   }
-}
-
-// 删除库存
-const handleDeleteInventory = (row: any) => {
-  ElMessageBox.confirm('确定删除该库存？', '警告', { type: 'warning' })
-    .then(() => {
-      ElMessage.success('删除成功')
-      loadInventory()
-    })
-    .catch(() => {})
 }
 
 // 查看订单
@@ -816,7 +814,7 @@ const batchImportAll = async () => {
     batchImporting.value = true
     try {
       // 转换为批量导入数据
-      const importData = selectedRecords.value.map(record => ({
+      const importData = selectedRecords.value.map((record, index) => ({
         batchNo: record.batchNo || `B${record.packageNo}`,
         grade: record.grade || 'Ni9996',
         specification: record.grade || '99.96%',
@@ -831,9 +829,11 @@ const batchImportAll = async () => {
       // await api.post('/distribution/inventory/batch', importData)
       
       // 模拟添加到列表（实际应该调用 API）
-      importData.forEach(item => {
+      // 使用唯一 ID：时间戳 + 索引，避免冲突
+      const baseId = Date.now()
+      importData.forEach((item, idx) => {
         inventoryList.value.push({
-          id: Date.now() + Math.random(),
+          id: `${baseId}-${idx}`,  // 唯一 ID
           tankNo: item.batchNo,
           batchNo: item.batchNo,
           grade: item.grade,
@@ -872,7 +872,7 @@ const quickAddRecord = async (index: number) => {
   const record = aiRecognizedData.value[index]
   try {
     const newItem = {
-      id: Date.now(),
+      id: `import-${Date.now()}-${index}`,  // 唯一 ID
       tankNo: record.batchNo || `B${record.packageNo}`,
       batchNo: record.batchNo || `B${record.packageNo}`,
       grade: record.grade || 'Ni9996',
