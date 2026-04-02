@@ -462,6 +462,7 @@ import {
   PictureFilled,
   Download,
 } from '@element-plus/icons-vue'
+import * as distributionApi from '@/api/distribution'
 
 // 状态
 const activeTab = ref('inventory')
@@ -535,22 +536,23 @@ const orderTotalPieces = computed(() => {
   return selectedInventory.value.reduce((sum, item) => sum + (item.pieceCount || 0), 0)
 })
 
-// 加载数据（当前为空，等待 API 实现）
+// 加载数据
 const loadInventory = async () => {
   loading.value = true
   try {
-    // TODO: 调用 API
-    // const res = await api.get('/distribution/inventory', { params: { page: inventoryPage.value, limit: inventoryPageSize.value, keyword: searchKeyword.value } })
-    // inventoryList.value = res.data.data
-    // inventoryTotal.value = res.data.total
-    // stats.totalInventory = res.data.total
-    // stats.availableInventory = res.data.data.filter((i: any) => i.status === 'available').length
+    const res: any = await distributionApi.getInventory({
+      page: inventoryPage.value,
+      limit: inventoryPageSize.value,
+      keyword: searchKeyword.value,
+    })
     
-    // 刷新统计
-    stats.totalInventory = inventoryList.value.length
-    stats.availableInventory = inventoryList.value.filter((i: any) => i.status === 'available').length
-  } catch (error) {
-    ElMessage.error('加载库存失败')
+    inventoryList.value = res.data || []
+    inventoryTotal.value = res.total || 0
+    stats.totalInventory = res.total || 0
+    stats.availableInventory = (res.data || []).filter((i: any) => i.status === 'available').length
+  } catch (error: any) {
+    console.error('加载库存失败:', error)
+    ElMessage.error('加载库存失败：' + (error.response?.data?.message || error.message))
   } finally {
     loading.value = false
   }
@@ -559,17 +561,18 @@ const loadInventory = async () => {
 const loadOrders = async () => {
   loading.value = true
   try {
-    // TODO: 调用 API
-    // const res = await api.get('/distribution/orders', { params: { page: orderPage.value, limit: orderPageSize.value } })
-    // orderList.value = res.data.data
-    // orderTotal.value = res.data.total
-    // stats.totalOrders = res.data.total
+    const res: any = await distributionApi.getOrders({
+      page: orderPage.value,
+      limit: orderPageSize.value,
+    })
     
-    // 刷新统计
-    stats.totalOrders = orderList.value.length
-    stats.pendingOrders = orderList.value.filter((i: any) => i.status === 'pending').length
-  } catch (error) {
-    ElMessage.error('加载订单失败')
+    orderList.value = res.data || []
+    orderTotal.value = res.total || 0
+    stats.totalOrders = res.total || 0
+    stats.pendingOrders = (res.data || []).filter((i: any) => i.status === 'pending').length
+  } catch (error: any) {
+    console.error('加载订单失败:', error)
+    ElMessage.error('加载订单失败：' + (error.response?.data?.message || error.message))
   } finally {
     loading.value = false
   }
@@ -595,13 +598,24 @@ const handleSelectionChange = (selection: any[]) => {
 // 提交配货单
 const submitOrder = async () => {
   try {
-    // TODO: 调用 API
-    // await api.post('/distribution/order', { ...orderForm, items: selectedInventory.value })
+    const orderData = {
+      customerName: orderForm.customerName,
+      productSpec: orderForm.productSpec,
+      targetGrade: orderForm.targetGrade,
+      remark: orderForm.remark,
+      items: selectedInventory.value.map((item: any) => ({
+        inventoryId: item.id,
+        weight: item.weight,
+        pieces: item.pieceCount,
+      })),
+    }
+    
+    await distributionApi.createOrder(orderData)
     ElMessage.success('配货单创建成功')
     showCreateOrder.value = false
     loadOrders()
-  } catch (error) {
-    ElMessage.error('创建失败')
+  } catch (error: any) {
+    ElMessage.error('创建失败：' + (error.response?.data?.message || error.message))
   }
 }
 
@@ -614,20 +628,16 @@ const submitInventory = async () => {
       specification: inventoryForm.specification,
       weight: inventoryForm.weight,
       pieceCount: inventoryForm.pieceCount,
-      location: inventoryForm.location,
-      nickelContent: inventoryForm.nickelContent,
       inspectionDate: inventoryForm.inspectionDate,
     }
     
     if (editingInventoryId.value) {
       // 更新现有库存
-      // TODO: 调用 API 更新
-      // await api.patch(`/distribution/inventory/${editingInventoryId.value}`, inventoryData)
+      await distributionApi.updateInventory(editingInventoryId.value, inventoryData)
       ElMessage.success('库存更新成功')
     } else {
       // 新增库存
-      // TODO: 调用 API 创建
-      // await api.post('/distribution/inventory', inventoryData)
+      await distributionApi.createInventory(inventoryData)
       ElMessage.success('库存添加成功')
     }
     
@@ -638,6 +648,7 @@ const submitInventory = async () => {
     loadInventory()
   } catch (error: any) {
     ElMessage.error(editingInventoryId.value ? '更新失败' : '添加失败')
+    console.error('提交库存失败:', error)
   }
 }
 
@@ -680,27 +691,14 @@ const handleDeleteInventory = async (row: any) => {
       { type: 'warning' }
     )
     
-    // TODO: 调用 API 删除
-    // await api.delete(`/distribution/inventory/${row.id}`)
-    
-    // 从列表中移除（使用 tankNo 匹配，避免 ID 冲突）
-    const tankNo = row.tankNo || row.batchNo
-    const index = inventoryList.value.findIndex(item => 
-      (item.tankNo || item.batchNo) === tankNo
-    )
-    if (index !== -1) {
-      inventoryList.value.splice(index, 1)
-    }
-    
-    // 刷新统计
-    stats.totalInventory = inventoryList.value.length
-    stats.availableInventory = inventoryList.value.filter((i: any) => i.status === 'available').length
+    // 调用 API 删除
+    await distributionApi.deleteInventory(row.id)
     
     ElMessage.success('删除成功')
-    // 不调用 loadInventory()，避免重新加载模拟数据
+    loadInventory()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error('删除失败')
+      ElMessage.error('删除失败：' + (error.response?.data?.message || error.message))
     }
   }
 }
@@ -734,23 +732,14 @@ const handleDeleteOrder = async (row: any) => {
       { type: 'warning' }
     )
     
-    // TODO: 调用 API 删除
-    // await api.delete(`/distribution/order/${row.id}`)
-    
-    // 从列表中移除
-    const index = orderList.value.findIndex(item => item.id === row.id)
-    if (index !== -1) {
-      orderList.value.splice(index, 1)
-    }
-    
-    // 刷新统计
-    stats.totalOrders = orderList.value.length
-    stats.pendingOrders = orderList.value.filter((i: any) => i.status === 'pending').length
+    // 调用 API 删除
+    await distributionApi.deleteOrder(row.id)
     
     ElMessage.success('删除成功')
+    loadOrders()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error('删除失败')
+      ElMessage.error('删除失败：' + (error.response?.data?.message || error.message))
     }
   }
 }
@@ -868,34 +857,25 @@ const batchImportAll = async () => {
 const quickAddRecord = async (index: number) => {
   const record = aiRecognizedData.value[index]
   try {
-    const newItem = {
-      id: `import-${Date.now()}-${index}`,  // 唯一 ID
-      tankNo: record.batchNo || `B${record.packageNo}`,
+    const inventoryData = {
       batchNo: record.batchNo || `B${record.packageNo}`,
       grade: record.grade || 'Ni9996',
       specification: record.grade || '99.96%',
       weight: record.netWeight || 0,
       pieceCount: record.pieceCount || 0,
-      location: '',
-      nickelContent: parseFloat(record.grade?.replace('Ni', '') || '99.96'),
-      concentration: parseFloat(record.grade?.replace('Ni', '') || '99.96'),
-      status: 'available',
-      createdAt: new Date().toISOString(),
+      inspectionDate: record.date || new Date().toISOString().split('T')[0],
     }
     
-    // 添加到列表（实际应该调用 API）
-    inventoryList.value.push(newItem)
+    // 调用 API 创建
+    await distributionApi.createInventory(inventoryData)
     
     // 从识别列表中移除
     aiRecognizedData.value.splice(index, 1)
     
-    // 刷新统计
-    stats.totalInventory = inventoryList.value.length
-    stats.availableInventory = inventoryList.value.filter((i: any) => i.status === 'available').length
-    
     ElMessage.success('导入成功')
-  } catch (error) {
-    ElMessage.error('导入失败')
+    loadInventory()
+  } catch (error: any) {
+    ElMessage.error('导入失败：' + (error.response?.data?.message || error.message))
   }
 }
 
@@ -913,12 +893,27 @@ const beforeUpload = (file: any) => {
   return isImage && isLt10M
 }
 
-const handleAIRecognizeSuccess = (response: any) => {
-  if (response.success) {
-    ElMessage.success(response.message)
-    aiRecognizedData.value = response.data || []
-  } else {
-    ElMessage.error(response.message || 'AI 识别失败')
+const handleAIRecognizeSuccess = async (response: any, uploadFile: any) => {
+  try {
+    if (response.success) {
+      ElMessage.success(response.message)
+      // 处理 AI 返回的数据结构
+      if (response.data && Array.isArray(response.data)) {
+        aiRecognizedData.value = response.data
+      } else if (response.data && response.data.items) {
+        // 如果是新的格式 { batchNo, grade, date, items }
+        aiRecognizedData.value = response.data.items.map((item: any) => ({
+          ...item,
+          batchNo: response.data.batchNo,
+          grade: response.data.grade,
+          date: response.data.date,
+        }))
+      }
+    } else {
+      ElMessage.error(response.message || 'AI 识别失败')
+    }
+  } catch (error) {
+    ElMessage.error('处理识别结果失败')
   }
 }
 
