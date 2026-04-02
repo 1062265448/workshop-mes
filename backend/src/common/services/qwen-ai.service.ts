@@ -33,16 +33,6 @@ export class QwenAIService {
 
       this.logger.log(`✅ AI 识别完成，识别到 ${result.length} 条记录`);
       
-      // 处理批号：如果批号在表格顶部（如 26-7-084J），应用到所有行
-      if (result.length > 0 && result.batchNo) {
-        const globalBatchNo = result.batchNo;
-        result.forEach((item: any) => {
-          if (!item.batchNo || item.batchNo === globalBatchNo) {
-            item.batchNo = globalBatchNo;
-          }
-        });
-      }
-      
       return result;
     } catch (error: any) {
       this.logger.error(`❌ AI 识别失败：${error.message}`);
