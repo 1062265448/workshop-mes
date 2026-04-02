@@ -104,39 +104,71 @@ export class DistributionService {
 
   // ==================== 配货单管理 ====================
 
-  async createOrder(dto: CreateOrderDto) {
-    // 生成配货单号
-    const orderNo = 'DO' + new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14);
+  async createOrder(dto: any) {
+    try {
+      // 生成配货单号
+      const orderNo = 'DO' + new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14);
 
-    // 查找或创建客户
-    let customerId = 0;
-    let customer = await this.prisma.customer.findFirst({
-      where: { name: dto.customerName },
-    });
+      // 查找或创建客户
+      let customerId: number | undefined = undefined;
+      if (dto.customerName) {
+        let customer = await this.prisma.customer.findFirst({
+          where: { name: dto.customerName },
+        });
 
-    if (!customer) {
-      customer = await this.prisma.customer.create({
-        data: {
-          name: dto.customerName,
-        },
-      });
-      this.logger.log(`✅ 创建新客户：${dto.customerName}`);
-    }
+        if (!customer) {
+          customer = await this.prisma.customer.create({
+            data: {
+              name: dto.customerName,
+            },
+          });
+          this.logger.log(`✅ 创建新客户：${dto.customerName}`);
+        }
 
-    customerId = customer.id;
+        customerId = customer.id;
+      }
 
-    // 创建配货单（items 作为 JSON 字符串存储）
-    const order = await this.prisma.distributionOrder.create({
-      data: {
+      // 计算总重量和总片数
+      let totalWeight = 0;
+      let totalPieces = 0;
+
+      if (dto.items && Array.isArray(dto.items)) {
+        totalWeight = dto.items.reduce((sum: number, item: any) => sum + (Number(item.weight) || 0), 0);
+        totalPieces = dto.items.reduce((sum: number, item: any) => sum + (Number(item.pieces) || 0), 0);
+      }
+
+      this.logger.log(`📝 创建配货单数据：`, {
         orderNo,
         customerId,
-        items: JSON.stringify(dto.items ?? []),
-        status: 'pending',
-      },
-    });
+        customerName: dto.customerName,
+        productSpec: dto.productSpec,
+        targetGrade: dto.targetGrade,
+        itemsCount: dto.items?.length || 0,
+      });
 
-    this.logger.log(`✅ 配货单创建成功：${orderNo}`);
-    return order;
+      // 创建配货单
+      const order = await this.prisma.distributionOrder.create({
+        data: {
+          orderNo,
+          customerId: customerId ?? undefined,
+          customerName: dto.customerName || '未知客户',
+          productSpec: dto.productSpec || '',
+          targetGrade: dto.targetGrade || '',
+          remark: dto.remark || '',
+          items: JSON.stringify(dto.items ?? []),
+          totalWeight,
+          totalPieces,
+          totalPackages: dto.items?.length || 0,
+          status: 'pending',
+        },
+      });
+
+      this.logger.log(`✅ 配货单创建成功：${orderNo}`);
+      return order;
+    } catch (error: any) {
+      this.logger.error(`❌ 配货单创建失败：${error.message}`);
+      throw error;
+    }
   }
 
   async getOrders(page: number = 1, limit: number = 10) {

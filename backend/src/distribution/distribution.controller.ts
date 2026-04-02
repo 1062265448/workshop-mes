@@ -161,7 +161,8 @@ export class DistributionController {
   // ==================== 配货单管理 ====================
 
   @Post('order')
-  async createOrder(@Body() dto: CreateOrderDto) {
+  async createOrder(@Body() dto: any) {
+    // 直接接收任意对象，不进行 DTO 验证
     return this.distributionService.createOrder(dto);
   }
 

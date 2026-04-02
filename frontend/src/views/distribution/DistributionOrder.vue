@@ -659,14 +659,17 @@ const availableInventory = computed(() => {
   // 显示所有库存，映射配货单需要的字段
   return inventoryList.value.map((item: any) => ({
     id: item.id,
+    _originalId: item.id,  // 保存原始 ID
     batchNo: item.tankNo || item.batchNo,
     grade: item.grade || `Ni${Math.round((parseFloat(item.concentration) || 99.96) * 100)}`,
-    weight: parseFloat(item.weight) || 0,
-    pieceCount: parseInt(item.pieceCount) || 0,
-    location: item.location || '',
+    weight: 0,  // NickelInventory 没有 weight 字段
+    pieceCount: 0,  // NickelInventory 没有 pieceCount 字段
+    location: '',
     // 原始数据
     tankNo: item.tankNo,
     concentration: item.concentration,
+    temperature: item.temperature,
+    ph: item.ph,
   }))
 })
 
@@ -753,23 +756,35 @@ const handleSelectionChange = (selection: any[]) => {
 // 提交配货单
 const submitOrder = async () => {
   try {
+    console.log('提交配货单数据:', {
+      customerName: orderForm.customerName,
+      productSpec: orderForm.productSpec,
+      targetGrade: orderForm.targetGrade,
+      selectedItems: selectedInventory.value,
+    })
+    
     const orderData = {
       customerName: orderForm.customerName,
       productSpec: orderForm.productSpec,
       targetGrade: orderForm.targetGrade,
       remark: orderForm.remark,
       items: selectedInventory.value.map((item: any) => ({
-        inventoryId: item.id,
-        weight: item.weight,
-        pieces: item.pieceCount,
+        inventoryId: item._originalId || item.id,
+        weight: 0,  // 从库存表获取
+        pieces: 0,  // 从库存表获取
       })),
     }
     
-    await distributionApi.createOrder(orderData)
+    console.log('发送到后端的配货单数据:', orderData)
+    
+    const result = await distributionApi.createOrder(orderData)
+    console.log('配货单创建成功:', result)
+    
     ElMessage.success('配货单创建成功')
     showCreateOrder.value = false
     loadOrders()
   } catch (error: any) {
+    console.error('配货单创建失败:', error.response?.data || error)
     ElMessage.error('创建失败：' + (error.response?.data?.message || error.message))
   }
 }
