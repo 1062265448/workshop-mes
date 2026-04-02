@@ -668,18 +668,24 @@ const orderTotalPieces = computed(() => {
 const loadInventory = async () => {
   loading.value = true
   try {
+    console.log('📡 请求库存列表...')
     const res: any = await distributionApi.getInventory({
       page: inventoryPage.value,
       limit: inventoryPageSize.value,
       keyword: searchKeyword.value,
     })
     
+    console.log('📦 收到库存数据:', res)
+    console.log('📋 库存数量:', res.data?.length || 0)
+    
     inventoryList.value = res.data || []
     inventoryTotal.value = res.total || 0
     stats.totalInventory = res.total || 0
     stats.availableInventory = (res.data || []).filter((i: any) => i.status === 'available').length
+    
+    console.log('✅ 库存列表已更新:', inventoryList.value.length, '条')
   } catch (error: any) {
-    console.error('加载库存失败:', error)
+    console.error('❌ 加载库存失败:', error)
     ElMessage.error('加载库存失败：' + (error.response?.data?.message || error.message))
   } finally {
     loading.value = false
