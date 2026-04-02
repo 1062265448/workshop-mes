@@ -656,8 +656,18 @@ const orderForm = reactive({
 // 选中的库存
 const selectedInventory = ref([])
 const availableInventory = computed(() => {
-  // 显示所有库存（因为后端可能没有 status 字段）
-  return inventoryList.value
+  // 显示所有库存，映射配货单需要的字段
+  return inventoryList.value.map((item: any) => ({
+    id: item.id,
+    batchNo: item.tankNo || item.batchNo,
+    grade: item.grade || `Ni${Math.round((parseFloat(item.concentration) || 99.96) * 100)}`,
+    weight: parseFloat(item.weight) || 0,
+    pieceCount: parseInt(item.pieceCount) || 0,
+    location: item.location || '',
+    // 原始数据
+    tankNo: item.tankNo,
+    concentration: item.concentration,
+  }))
 })
 
 // 订单汇总
