@@ -752,11 +752,13 @@ const submitInventory = async () => {
   try {
     // 转换为后端需要的格式
     const inventoryData = {
-      tankNo: inventoryForm.batchNo,  // 批号 → tankNo
-      concentration: inventoryForm.grade ? parseFloat(inventoryForm.grade.replace('Ni', '')) : 99.96,  // 牌号 → concentration
-      temperature: 25,  // 默认温度
-      ph: 7,  // 默认 pH 值
+      tankNo: inventoryForm.batchNo || `TANK-${Date.now()}`,
+      concentration: inventoryForm.grade ? parseFloat(inventoryForm.grade.replace('Ni', '')) : 99.96,
+      temperature: 25,
+      ph: 7,
     }
+    
+    console.log('提交库存数据:', inventoryData)
     
     if (editingInventoryId.value) {
       // 更新现有库存
@@ -764,7 +766,8 @@ const submitInventory = async () => {
       ElMessage.success('库存更新成功')
     } else {
       // 新增库存
-      await distributionApi.createInventory(inventoryData)
+      const result = await distributionApi.createInventory(inventoryData)
+      console.log('库存创建成功:', result)
       ElMessage.success('库存添加成功')
     }
     
@@ -774,8 +777,8 @@ const submitInventory = async () => {
     resetInventoryForm()
     loadInventory()
   } catch (error: any) {
-    ElMessage.error(editingInventoryId.value ? '更新失败' : '添加失败')
-    console.error('提交库存失败:', error.response?.data || error.message)
+    console.error('提交库存失败:', error.response?.data || error)
+    ElMessage.error(editingInventoryId.value ? '更新失败' : '添加失败：' + (error.response?.data?.message || error.message))
   }
 }
 

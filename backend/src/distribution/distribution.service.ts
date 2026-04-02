@@ -32,14 +32,14 @@ export class DistributionService {
     return { data, total, page, limit };
   }
 
-  async createInventory(dto: CreateInventoryDto) {
-    // 使用 tankNo 作为批号
+  async createInventory(dto: any) {
+    // 字段映射：DTO → Prisma 模型
     return this.prisma.nickelInventory.create({
       data: {
-        tankNo: dto.batchNo,
-        concentration: dto.nickelContent ?? 99.96,
-        temperature: 25,
-        ph: 7,
+        tankNo: dto.tankNo || dto.batchNo || 'TANK-' + Date.now(),
+        concentration: dto.concentration || dto.nickelContent || 99.96,
+        temperature: dto.temperature || 25,
+        ph: dto.ph || 7,
       },
     });
   }
