@@ -110,17 +110,17 @@
             </el-table-column>
             <el-table-column label="浓度 (%)" width="100" align="right">
               <template #default="{ row }">
-                {{ (row.concentration || 99.96).toFixed(2) }}
+                {{ (parseFloat(row.concentration) || 99.96).toFixed(2) }}
               </template>
             </el-table-column>
             <el-table-column label="温度 (°C)" width="100" align="right">
               <template #default="{ row }">
-                {{ (row.temperature || 25).toFixed(1) }}
+                {{ (parseFloat(row.temperature) || 25).toFixed(1) }}
               </template>
             </el-table-column>
             <el-table-column label="pH 值" width="80" align="right">
               <template #default="{ row }">
-                {{ (row.ph || 7).toFixed(1) }}
+                {{ (parseFloat(row.ph) || 7).toFixed(1) }}
               </template>
             </el-table-column>
             <el-table-column label="入库时间" width="160">
