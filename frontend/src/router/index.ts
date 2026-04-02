@@ -55,6 +55,12 @@ const routes = [
         meta: { title: '平面库配货' },
       },
       {
+        path: 'distribution/history',
+        name: 'RecognitionHistory',
+        component: () => import('@/views/distribution/RecognitionHistory.vue'),
+        meta: { title: '识别历史' },
+      },
+      {
         path: 'ai',
         name: 'AI',
         component: () => import('@/views/Placeholder.vue'),

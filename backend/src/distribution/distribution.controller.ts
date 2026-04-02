@@ -56,6 +56,14 @@ export class DistributionController {
     return this.distributionService.batchCreateInventory(items);
   }
 
+  @Get('recognition-history')
+  async getRecognitionHistory(
+    @Query('page', new ParseIntPipe({ optional: true })) page?: number,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+  ) {
+    return this.distributionService.getRecognitionHistory(page || 1, limit || 20);
+  }
+
   @Post('inventory/ai-recognize')
   @UseInterceptors(
     FileInterceptor('image', {
@@ -88,6 +96,14 @@ export class DistributionController {
 
       this.logger.log(`✅ AI 识别成功，识别到 ${aiResult.length} 条记录`);
 
+      // 保存识别历史
+      await this.distributionService.saveRecognitionHistory(
+        `/uploads/inventory/${file.filename}`,
+        aiResult,
+        aiResult.length,
+        'success'
+      );
+
       return {
         success: true,
         message: `AI 识别成功，共 ${aiResult.length} 条记录`,
@@ -98,6 +114,16 @@ export class DistributionController {
       };
     } catch (error: any) {
       this.logger.error(`❌ AI 识别失败：${error.message}`);
+      
+      // 保存失败历史
+      await this.distributionService.saveRecognitionHistory(
+        `/uploads/inventory/${file.filename}`,
+        {},
+        0,
+        'failed',
+        error.message
+      );
+      
       return {
         success: false,
         error: error.message,

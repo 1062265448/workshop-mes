@@ -14,6 +14,10 @@
           <el-icon><Plus /></el-icon>
           新建配货单
         </el-button>
+        <el-button @click="$router.push('/distribution/history')">
+          <el-icon><Document /></el-icon>
+          识别历史
+        </el-button>
         <el-button @click="refreshData">
           <el-icon><Refresh /></el-icon>
           刷新

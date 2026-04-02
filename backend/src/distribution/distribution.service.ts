@@ -206,4 +206,31 @@ export class DistributionService {
       data: dto,
     });
   }
+
+  // ==================== AI 识别历史 ====================
+
+  async saveRecognitionHistory(imageUrl: string, result: any, itemCount: number, status: string, errorMessage?: string) {
+    return this.prisma.aiRecognitionHistory.create({
+      data: {
+        imageUrl,
+        result: JSON.stringify(result),
+        itemCount,
+        status,
+        errorMessage: errorMessage ?? null,
+      },
+    });
+  }
+
+  async getRecognitionHistory(page: number = 1, limit: number = 20) {
+    const skip = (page - 1) * limit;
+    const [data, total] = await Promise.all([
+      this.prisma.aiRecognitionHistory.findMany({
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.aiRecognitionHistory.count(),
+    ]);
+    return { data, total, page, limit };
+  }
 }

@@ -205,6 +205,17 @@ model DefectSample {
   defectType DefectType @relation(fields: [defectTypeId], references: [id])
 }
 
+// ==================== AI 识别历史 ====================
+model AiRecognitionHistory {
+  id          Int      @id @default(autoincrement())
+  imageUrl    String   // 图片路径
+  result      String   @db.Text // JSON 格式的识别结果
+  itemCount   Int      // 识别到的条目数
+  status      String   @default("success") // success, failed
+  errorMessage String? @db.Text
+  createdAt   DateTime @default(now())
+}
+
 // ==================== 平面库配货 ====================
 model Customer {
   id          Int      @id @default(autoincrement())
