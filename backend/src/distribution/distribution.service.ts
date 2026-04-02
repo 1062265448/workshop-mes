@@ -33,11 +33,14 @@ export class DistributionService {
   }
 
   async createInventory(dto: any) {
+    // 生成唯一的 tankNo
+    const tankNo = dto.tankNo || dto.batchNo || `TANK-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    
     // 字段映射：DTO → Prisma 模型
     return this.prisma.nickelInventory.create({
       data: {
-        tankNo: dto.tankNo || dto.batchNo || 'TANK-' + Date.now(),
-        concentration: dto.concentration || dto.nickelContent || 99.96,
+        tankNo,
+        concentration: dto.concentration || 99.96,
         temperature: dto.temperature || 25,
         ph: dto.ph || 7,
       },
