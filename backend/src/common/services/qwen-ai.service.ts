@@ -31,7 +31,18 @@ export class QwenAIService {
       // 调用千问 VL 模型
       const result = await this.callQwenVL(imageUrl);
 
-      this.logger.log(`✅ AI 识别完成`);
+      this.logger.log(`✅ AI 识别完成，识别到 ${result.length} 条记录`);
+      
+      // 处理批号：如果批号在表格顶部（如 26-7-084J），应用到所有行
+      if (result.length > 0 && result.batchNo) {
+        const globalBatchNo = result.batchNo;
+        result.forEach((item: any) => {
+          if (!item.batchNo || item.batchNo === globalBatchNo) {
+            item.batchNo = globalBatchNo;
+          }
+        });
+      }
+      
       return result;
     } catch (error: any) {
       this.logger.error(`❌ AI 识别失败：${error.message}`);
@@ -111,9 +122,19 @@ export class QwenAIService {
     // 解析 JSON
     try {
       // 提取 JSON 部分（可能包含在代码块中）
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
+        // 将批号、牌号、日期应用到每个 item
+        const { batchNo, grade, date, items } = parsed;
+        if (items && Array.isArray(items)) {
+          return items.map((item: any) => ({
+            ...item,
+            batchNo: item.batchNo || batchNo,
+            grade: item.grade || grade,
+            date: item.date || date,
+          }));
+        }
         return parsed;
       }
       return JSON.parse(content);

@@ -394,16 +394,6 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="储位">
-              <el-input v-model="inventoryForm.location" placeholder="如：A-01-01" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="镍含量 (%)" required>
-              <el-input-number v-model="inventoryForm.nickelContent" :min="0" :max="100" :precision="2" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
             <el-form-item label="检测日期" required>
               <el-date-picker
                 v-model="inventoryForm.inspectionDate"
@@ -444,8 +434,6 @@
         <el-table-column prop="specification" label="规格" width="100" />
         <el-table-column prop="weight" label="重量 (kg)" width="100" align="right" />
         <el-table-column prop="pieceCount" label="块数" width="80" align="right" />
-        <el-table-column prop="location" label="储位" width="100" />
-        <el-table-column prop="nickelContent" label="镍含量 (%)" width="100" align="right" />
         <el-table-column label="操作" width="80" fixed="right">
           <template #default="{ $index }">
             <el-button link type="danger" @click="removeBatchItem($index)">删除</el-button>
@@ -518,8 +506,6 @@ const inventoryForm = reactive({
   specification: '',
   weight: 0,
   pieceCount: 0,
-  location: '',
-  nickelContent: 0,
   inspectionDate: '',
 })
 
