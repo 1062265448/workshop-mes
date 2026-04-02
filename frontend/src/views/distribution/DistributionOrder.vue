@@ -650,7 +650,10 @@ const orderForm = reactive({
 
 // 选中的库存
 const selectedInventory = ref([])
-const availableInventory = computed(() => inventoryList.value.filter((item: any) => item.status === 'available'))
+const availableInventory = computed(() => {
+  // 显示所有库存（因为后端可能没有 status 字段）
+  return inventoryList.value
+})
 
 // 订单汇总
 const orderTotalWeight = computed(() => {
