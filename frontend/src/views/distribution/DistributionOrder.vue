@@ -549,7 +549,7 @@ const orderTotalPieces = computed(() => {
   return selectedInventory.value.reduce((sum, item) => sum + (item.pieceCount || 0), 0)
 })
 
-// 加载数据
+// 加载数据（当前为空，等待 API 实现）
 const loadInventory = async () => {
   loading.value = true
   try {
@@ -560,14 +560,9 @@ const loadInventory = async () => {
     // stats.totalInventory = res.data.total
     // stats.availableInventory = res.data.data.filter((i: any) => i.status === 'available').length
     
-    // 模拟数据
-    inventoryList.value = [
-      { id: 1, batchNo: 'Ni20260401-001', grade: 'Ni9996', specification: '99.96%', weight: 1000, pieceCount: 100, location: 'A-01-01', nickelContent: 99.96, status: 'available', createdAt: '2026-04-01 10:00:00' },
-      { id: 2, batchNo: 'Ni20260401-002', grade: 'Ni9990', specification: '99.90%', weight: 1500, pieceCount: 150, location: 'A-01-02', nickelContent: 99.90, status: 'available', createdAt: '2026-04-01 11:00:00' },
-    ]
-    inventoryTotal.value = 2
-    stats.totalInventory = 2
-    stats.availableInventory = 2
+    // 刷新统计
+    stats.totalInventory = inventoryList.value.length
+    stats.availableInventory = inventoryList.value.filter((i: any) => i.status === 'available').length
   } catch (error) {
     ElMessage.error('加载库存失败')
   } finally {
@@ -584,12 +579,9 @@ const loadOrders = async () => {
     // orderTotal.value = res.data.total
     // stats.totalOrders = res.data.total
     
-    // 模拟数据
-    orderList.value = [
-      { id: 1, orderNo: 'DO202604010001', customerName: '某某公司', productName: '电解镍', targetGrade: 'Ni9996', totalWeight: 2500, totalPieces: 250, status: 'draft', createdAt: '2026-04-01 14:00:00' },
-    ]
-    orderTotal.value = 1
-    stats.totalOrders = 1
+    // 刷新统计
+    stats.totalOrders = orderList.value.length
+    stats.pendingOrders = orderList.value.filter((i: any) => i.status === 'pending').length
   } catch (error) {
     ElMessage.error('加载订单失败')
   } finally {
