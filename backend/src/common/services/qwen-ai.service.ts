@@ -112,7 +112,17 @@ export class QwenAIService {
     // 解析 JSON
     try {
       // 提取 JSON 部分（可能包含在代码块中）
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      // 先尝试匹配数组格式 [...]
+      let jsonMatch = content.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const items = JSON.parse(jsonMatch[0]);
+        if (Array.isArray(items)) {
+          return items;
+        }
+      }
+      
+      // 再尝试匹配对象格式 {...}
+      jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
         // 将批号、牌号、日期应用到每个 item
@@ -127,9 +137,12 @@ export class QwenAIService {
         }
         return parsed;
       }
+      
+      // 最后尝试直接解析
       return JSON.parse(content);
     } catch (parseError) {
-      this.logger.warn(`⚠️ JSON 解析失败，返回空数组`);
+      this.logger.warn(`⚠️ JSON 解析失败：${parseError}`);
+      this.logger.warn(`原始内容：${content}`);
       return [];
     }
   }
