@@ -123,7 +123,7 @@
                 {{ (row.ph || 7).toFixed(1) }}
               </template>
             </el-table-column>
-            <el-table-column label "入库时间" width="160">
+            <el-table-column label="入库时间" width="160">
               <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
             </el-table-column>
             <el-table-column label="操作" fixed="right" width="180">
