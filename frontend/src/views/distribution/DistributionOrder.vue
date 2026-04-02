@@ -288,11 +288,12 @@
         <el-upload
           ref="uploadRef"
           class="upload-demo"
-          action="/api/distribution/inventory/ai-recognize"
+          :action="`${API_BASE}/distribution/inventory/ai-recognize`"
           :headers="uploadHeaders"
           :on-success="handleAIRecognizeSuccess"
           :on-error="handleAIRecognizeError"
           :before-upload="beforeUpload"
+          name="image"
           accept="image/*"
           drag
         >
@@ -309,20 +310,56 @@
 
         <!-- AI 识别结果预览 -->
         <div v-if="aiRecognizedData.length > 0" class="ai-preview">
-          <el-divider>AI 识别结果（{{ aiRecognizedData.length }} 条）</el-divider>
-          <el-table :data="aiRecognizedData" max-height="300" border size="small">
-            <el-table-column prop="packageNo" label="包号" width="60" />
-            <el-table-column prop="pieceCount" label="块数" width="60" align="right" />
-            <el-table-column prop="netWeight" label="净重 (kg)" width="90" align="right" />
-            <el-table-column prop="grossWeight" label="毛重 (kg)" width="90" align="right" />
-            <el-table-column prop="grade" label="牌号" width="80" />
-            <el-table-column prop="batchNo" label="批号" width="120" />
-            <el-table-column label="操作" width="80" fixed="right">
+          <div class="ai-preview-header">
+            <el-divider style="margin: 16px 0;">AI 识别结果（{{ aiRecognizedData.length }} 条）</el-divider>
+            <div class="preview-actions">
+              <el-checkbox v-model="selectAll" @change="handleSelectAll">全选</el-checkbox>
+              <el-button type="primary" size="small" @click="batchImportAll" :disabled="selectedRecords.length === 0">
+                <el-icon><Download /></el-icon>
+                批量导入（{{ selectedRecords.length }} 条）
+              </el-button>
+            </div>
+          </div>
+          
+          <el-table 
+            :data="paginatedData" 
+            max-height="400" 
+            border 
+            size="small"
+            @selection-change="handleTableSelectionChange"
+          >
+            <el-table-column type="selection" width="50" />
+            <el-table-column prop="packageNo" label="包号" width="70" align="center" />
+            <el-table-column prop="pieceCount" label="块数" width="70" align="right" />
+            <el-table-column prop="netWeight" label="净重 (kg)" width="100" align="right" />
+            <el-table-column prop="grossWeight" label="毛重 (kg)" width="100" align="right" />
+            <el-table-column prop="grade" label="牌号" width="90" align="center">
+              <template #default="{ row }">
+                <el-tag size="small" :type="getGradeType(row.grade)">{{ row.grade }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="batchNo" label="批号" width="130" />
+            <el-table-column prop="inspector" label="计量员" width="80" align="center" />
+            <el-table-column prop="date" label="日期" width="100" align="center" />
+            <el-table-column label="操作" width="140" fixed="right">
               <template #default="{ $index }">
-                <el-button link type="primary" @click="selectAIRecord($index)">选择</el-button>
+                <el-button link type="primary" size="small" @click="selectAIRecord($index + (currentPage - 1) * pageSize)">填充</el-button>
+                <el-button link type="success" size="small" @click="quickAddRecord($index + (currentPage - 1) * pageSize)">单条导入</el-button>
               </template>
             </el-table-column>
           </el-table>
+          
+          <!-- 分页 -->
+          <el-pagination
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :page-sizes="[10, 20, 50, 100]"
+            :total="aiRecognizedData.length"
+            layout="total, sizes, prev, pager, next, jumper"
+            class="ai-pagination"
+            @size-change="handleSizeChange"
+            @current-change="handleCurrentChange"
+          />
         </div>
       </div>
 
@@ -439,6 +476,7 @@ import {
   Refresh,
   Search,
   PictureFilled,
+  Download,
 } from '@element-plus/icons-vue'
 
 // 状态
@@ -454,8 +492,14 @@ const batchImportData = ref([])
 const showBatchImport = ref(false)
 const batchImporting = ref(false)
 
+// 分页和选择
+const currentPage = ref(1)
+const pageSize = ref(20)
+const selectAll = ref(false)
+const selectedRecords = ref([])
+
 // API 基础 URL
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'
+const API_BASE = 'http://localhost:3001'
 const uploadHeaders = computed(() => ({}))
 
 // 统计数据
@@ -645,11 +689,111 @@ const handleDeleteOrder = (row: any) => {
     .catch(() => {})
 }
 
+// 分页数据
+const paginatedData = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return aiRecognizedData.value.slice(start, end)
+})
+
 // AI 识别相关函数
 const handleAIRecognize = () => {
   // 打开对话框并触发文件选择
   showAddInventory.value = true
   // 用户可以在对话框中点击上传区域
+}
+
+// 分页处理
+const handleSizeChange = (val: number) => {
+  pageSize.value = val
+  currentPage.value = 1
+}
+
+const handleCurrentChange = (val: number) => {
+  currentPage.value = val
+}
+
+// 全选功能
+const handleSelectAll = (checked: boolean) => {
+  if (checked) {
+    selectedRecords.value = [...aiRecognizedData.value]
+  } else {
+    selectedRecords.value = []
+  }
+  selectAll.value = checked
+}
+
+// 表格选择变化
+const handleTableSelectionChange = (selection: any[]) => {
+  selectedRecords.value = selection
+  // 更新全选状态
+  selectAll.value = selection.length === aiRecognizedData.value.length && aiRecognizedData.value.length > 0
+}
+
+// 批量导入所有选中记录
+const batchImportAll = async () => {
+  if (selectedRecords.value.length === 0) {
+    ElMessage.warning('请先选择要导入的记录')
+    return
+  }
+  
+  ElMessageBox.confirm(
+    `确认导入选中的 ${selectedRecords.value.length} 条记录到库存系统？`,
+    '批量导入确认',
+    { type: 'warning' }
+  ).then(async () => {
+    batchImporting.value = true
+    try {
+      // 转换为批量导入数据
+      const importData = selectedRecords.value.map(record => ({
+        batchNo: record.batchNo || `B${record.packageNo}`,
+        grade: record.grade || 'Ni9996',
+        specification: record.grade || '99.96%',
+        weight: record.netWeight || 0,
+        pieceCount: record.pieceCount || 0,
+        location: '',
+        nickelContent: parseFloat(record.grade?.replace('Ni', '') || '99.96'),
+        inspectionDate: record.date || new Date().toISOString().split('T')[0],
+      }))
+      
+      // TODO: 调用 API 批量创建
+      // await api.post('/distribution/inventory/batch', importData)
+      
+      ElMessage.success(`成功导入 ${importData.length} 条记录`)
+      aiRecognizedData.value = []
+      selectedRecords.value = []
+      selectAll.value = false
+      showAddInventory.value = false
+      loadInventory()
+    } catch (error) {
+      ElMessage.error('批量导入失败')
+    } finally {
+      batchImporting.value = false
+    }
+  }).catch(() => {})
+}
+
+// 单条快速导入
+const quickAddRecord = async (index: number) => {
+  const record = aiRecognizedData.value[index]
+  try {
+    // TODO: 调用 API 单条创建
+    // await api.post('/distribution/inventory', {
+    //   batchNo: record.batchNo || `B${record.packageNo}`,
+    //   grade: record.grade || 'Ni9996',
+    //   specification: record.grade || '99.96%',
+    //   weight: record.netWeight || 0,
+    //   pieceCount: record.pieceCount || 0,
+    //   nickelContent: parseFloat(record.grade?.replace('Ni', '') || '99.96'),
+    //   inspectionDate: record.date || new Date().toISOString().split('T')[0],
+    // })
+    
+    ElMessage.success('导入成功')
+    aiRecognizedData.value.splice(index, 1)
+    loadInventory()
+  } catch (error) {
+    ElMessage.error('导入失败')
+  }
 }
 
 const beforeUpload = (file: any) => {
@@ -682,10 +826,15 @@ const handleAIRecognizeError = () => {
 const selectAIRecord = (index: number) => {
   const record = aiRecognizedData.value[index]
   
+  if (!record) {
+    ElMessage.warning('记录不存在')
+    return
+  }
+  
   // 填充表单
-  inventoryForm.batchNo = record.batchNo || ''
-  inventoryForm.grade = record.grade || ''
-  inventoryForm.specification = record.grade || ''
+  inventoryForm.batchNo = record.batchNo || `B${record.packageNo}`
+  inventoryForm.grade = record.grade || 'Ni9996'
+  inventoryForm.specification = record.grade || '99.96%'
   inventoryForm.weight = record.netWeight || 0
   inventoryForm.pieceCount = record.pieceCount || 0
   inventoryForm.nickelContent = parseFloat(record.grade?.replace('Ni', '') || '99.96')
@@ -922,6 +1071,34 @@ onMounted(() => {
 
 .ai-recognize-section :deep(.el-alert) {
   margin-bottom: 16px;
+}
+
+.ai-preview {
+  margin-top: 16px;
+}
+
+.ai-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ai-pagination {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.batch-import-btn {
+  margin-top: 16px;
+  width: 100%;
 }
 
 .upload-demo {

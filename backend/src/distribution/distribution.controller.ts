@@ -11,7 +11,6 @@ import {
   Logger,
   UseInterceptors,
   UploadedFile,
-  Res,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -24,7 +23,7 @@ import { QwenAIService } from '../common/services/qwen-ai.service';
 @Controller('distribution')
 export class DistributionController {
   private readonly logger = new Logger(DistributionController.name);
-  private readonly uploadDir = './uploads/inventory';
+  private readonly uploadDir: string = './uploads/inventory';
 
   constructor(
     private readonly distributionService: DistributionService,
@@ -61,7 +60,7 @@ export class DistributionController {
   @UseInterceptors(
     FileInterceptor('image', {
       storage: diskStorage({
-        destination: this.uploadDir,
+        destination: './uploads/inventory',
         filename: (req, file, cb) => {
           const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
           cb(null, 'inventory-' + uniqueSuffix + extname(file.originalname));

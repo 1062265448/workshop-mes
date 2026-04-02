@@ -127,8 +127,8 @@ export class QwenAIService {
    * 获取文件 MIME 类型
    */
   private getMimeType(filePath: string): string {
-    const ext = filePath.split('.').pop()?.toLowerCase();
-    const mimeTypes: any = {
+    const ext = filePath.split('.').pop()?.toLowerCase() || '';
+    const mimeTypes: Record<string, string> = {
       jpg: 'image/jpeg',
       jpeg: 'image/jpeg',
       png: 'image/png',
