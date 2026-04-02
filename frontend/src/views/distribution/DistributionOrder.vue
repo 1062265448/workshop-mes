@@ -683,12 +683,18 @@ const loadInventory = async () => {
     console.log('📦 收到库存数据:', res)
     console.log('📋 库存数量:', res.data?.length || 0)
     
-    inventoryList.value = res.data || []
-    inventoryTotal.value = res.total || 0
-    stats.totalInventory = res.total || 0
-    stats.availableInventory = (res.data || []).filter((i: any) => i.status === 'available').length
+    // 处理后端返回的数据格式
+    const dataList = res.data || res.items || []
+    console.log('📋 原始数据:', dataList)
+    console.log('📋 数据字段:', dataList.length > 0 ? Object.keys(dataList[0]) : '无数据')
+    
+    inventoryList.value = dataList
+    inventoryTotal.value = res.total || dataList.length
+    stats.totalInventory = res.total || dataList.length
+    stats.availableInventory = dataList.filter((i: any) => i.status === 'available').length
     
     console.log('✅ 库存列表已更新:', inventoryList.value.length, '条')
+    console.log('✅ 第一条数据:', inventoryList.value[0])
   } catch (error: any) {
     console.error('❌ 加载库存失败:', error)
     ElMessage.error('加载库存失败：' + (error.response?.data?.message || error.message))
