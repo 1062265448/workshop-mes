@@ -753,7 +753,7 @@ const submitInventory = async () => {
     // 转换为后端需要的格式
     const inventoryData = {
       tankNo: inventoryForm.batchNo || `TANK-${Date.now()}`,
-      concentration: inventoryForm.grade ? parseFloat(inventoryForm.grade.replace('Ni', '')) : 99.96,
+      concentration: inventoryForm.grade ? parseFloat(inventoryForm.grade.replace('Ni', '')) / 100 : 99.96,  // 9996 → 99.96
       temperature: 25,
       ph: 7,
     }

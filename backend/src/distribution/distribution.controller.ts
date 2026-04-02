@@ -47,7 +47,8 @@ export class DistributionController {
   }
 
   @Post('inventory')
-  async createInventory(@Body() dto: CreateInventoryDto) {
+  async createInventory(@Body() dto: any) {
+    // 直接接收任意对象，不进行 DTO 验证
     return this.distributionService.createInventory(dto);
   }
 
