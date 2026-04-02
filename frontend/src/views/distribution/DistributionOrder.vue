@@ -719,8 +719,7 @@ const handleDeleteInventory = async (row: any) => {
     stats.availableInventory = inventoryList.value.filter((i: any) => i.status === 'available').length
     
     ElMessage.success('删除成功')
-    // 延迟刷新以模拟 API 调用
-    setTimeout(() => loadInventory(), 500)
+    // 不调用 loadInventory()，避免重新加载模拟数据
   } catch (error: any) {
     if (error !== 'cancel') {
       ElMessage.error('删除失败')
@@ -749,13 +748,33 @@ const handleConfirmOrder = (row: any) => {
 }
 
 // 删除订单
-const handleDeleteOrder = (row: any) => {
-  ElMessageBox.confirm('确定删除该配货单？', '警告', { type: 'warning' })
-    .then(() => {
-      ElMessage.success('删除成功')
-      loadOrders()
-    })
-    .catch(() => {})
+const handleDeleteOrder = async (row: any) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除配货单 "${row.orderNo}"？`,
+      '删除确认',
+      { type: 'warning' }
+    )
+    
+    // TODO: 调用 API 删除
+    // await api.delete(`/distribution/order/${row.id}`)
+    
+    // 从列表中移除
+    const index = orderList.value.findIndex(item => item.id === row.id)
+    if (index !== -1) {
+      orderList.value.splice(index, 1)
+    }
+    
+    // 刷新统计
+    stats.totalOrders = orderList.value.length
+    stats.pendingOrders = orderList.value.filter((i: any) => i.status === 'pending').length
+    
+    ElMessage.success('删除成功')
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败')
+    }
+  }
 }
 
 // 分页数据
