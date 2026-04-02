@@ -549,6 +549,7 @@ import {
   Search,
   PictureFilled,
   Download,
+  Document,
 } from '@element-plus/icons-vue'
 import * as distributionApi from '@/api/distribution'
 
