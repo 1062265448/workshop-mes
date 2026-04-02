@@ -96,29 +96,34 @@
             border
             class="data-table"
           >
-            <el-table-column prop="batchNo" label="批号" width="150" />
-            <el-table-column prop="grade" label="品级" width="100">
+            <el-table-column label="批号" width="150">
               <template #default="{ row }">
-                <el-tag :type="getGradeType(row.grade)">{{ row.grade }}</el-tag>
+                {{ row.tankNo || row.batchNo }}
               </template>
             </el-table-column>
-            <el-table-column prop="specification" label="规格" width="120" />
-            <el-table-column prop="weight" label="重量 (kg)" width="100" align="right">
-              <template #default="{ row }">{{ row.weight?.toFixed(2) }}</template>
-            </el-table-column>
-            <el-table-column prop="pieceCount" label="片数" width="80" align="right" />
-            <el-table-column prop="location" label="储位" width="100" />
-            <el-table-column prop="nickelContent" label="镍含量 (%)" width="100" align="right">
-              <template #default="{ row }">{{ row.nickelContent?.toFixed(2) }}</template>
-            </el-table-column>
-            <el-table-column prop="status" label="状态" width="100">
+            <el-table-column label="品级" width="100">
               <template #default="{ row }">
-                <el-tag :type="getStatusType(row.status)">
-                  {{ getStatusText(row.status) }}
+                <el-tag :type="getGradeType(row.grade || `Ni${Math.round((row.concentration || 99.96) * 100)}`)">
+                  {{ row.grade || `Ni${Math.round((row.concentration || 99.96) * 100)}` }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="createdAt" label="入库时间" width="160">
+            <el-table-column label="浓度 (%)" width="100" align="right">
+              <template #default="{ row }">
+                {{ (row.concentration || 99.96).toFixed(2) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="温度 (°C)" width="100" align="right">
+              <template #default="{ row }">
+                {{ (row.temperature || 25).toFixed(1) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="pH 值" width="80" align="right">
+              <template #default="{ row }">
+                {{ (row.ph || 7).toFixed(1) }}
+              </template>
+            </el-table-column>
+            <el-table-column label "入库时间" width="160">
               <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
             </el-table-column>
             <el-table-column label="操作" fixed="right" width="180">
@@ -804,12 +809,14 @@ const handleEditInventory = (row: any) => {
   // 填充表单
   editingInventoryId.value = row.id
   inventoryForm.batchNo = row.tankNo || row.batchNo || ''
-  inventoryForm.grade = row.grade || 'Ni9996'
-  inventoryForm.specification = row.specification || '99.96%'
-  inventoryForm.weight = row.weight || row.concentration || 0
-  inventoryForm.pieceCount = row.pieceCount || 0
+  // 将浓度转换为牌号（99.96 → Ni9996）
+  const concentration = parseFloat(row.concentration) || 99.96
+  inventoryForm.grade = `Ni${Math.round(concentration * 100)}`
+  inventoryForm.specification = `${concentration.toFixed(2)}%`
+  inventoryForm.weight = parseFloat(row.weight) || 0
+  inventoryForm.pieceCount = parseInt(row.pieceCount) || 0
   inventoryForm.location = row.location || ''
-  inventoryForm.nickelContent = row.nickelContent || row.concentration || 99.96
+  inventoryForm.nickelContent = concentration
   inventoryForm.inspectionDate = row.inspectionDate || formatDate(row.createdAt).split(' ')[0]
   
   showAddInventory.value = true
