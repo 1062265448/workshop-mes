@@ -325,22 +325,106 @@
             @selection-change="handleTableSelectionChange"
           >
             <el-table-column type="selection" width="50" />
-            <el-table-column prop="packageNo" label="包号" width="70" align="center" />
-            <el-table-column prop="pieceCount" label="块数" width="70" align="right" />
-            <el-table-column prop="netWeight" label="净重 (kg)" width="100" align="right" />
-            <el-table-column prop="grossWeight" label="毛重 (kg)" width="100" align="right" />
-            <el-table-column prop="grade" label="牌号" width="90" align="center">
-              <template #default="{ row }">
-                <el-tag size="small" :type="getGradeType(row.grade)">{{ row.grade }}</el-tag>
+            <el-table-column prop="packageNo" label="包号" width="70" align="center">
+              <template #default="{ row, $index }">
+                <el-input 
+                  v-if="editingIndex === $index + (currentPage - 1) * pageSize" 
+                  v-model="row.packageNo" 
+                  size="small" 
+                  style="width: 60px"
+                />
+                <span v-else>{{ row.packageNo }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="batchNo" label="批号" width="130" />
-            <el-table-column prop="inspector" label="计量员" width="80" align="center" />
-            <el-table-column prop="date" label="日期" width="100" align="center" />
-            <el-table-column label="操作" width="140" fixed="right">
+            <el-table-column prop="pieceCount" label="块数" width="70" align="right">
+              <template #default="{ row, $index }">
+                <el-input-number 
+                  v-if="editingIndex === $index + (currentPage - 1) * pageSize" 
+                  v-model="row.pieceCount" 
+                  size="small" 
+                  :min="0" 
+                  style="width: 60px"
+                />
+                <span v-else>{{ row.pieceCount }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="netWeight" label="净重 (kg)" width="100" align="right">
+              <template #default="{ row, $index }">
+                <el-input-number 
+                  v-if="editingIndex === $index + (currentPage - 1) * pageSize" 
+                  v-model="row.netWeight" 
+                  size="small" 
+                  :min="0" 
+                  :precision="2" 
+                  style="width: 90px"
+                />
+                <span v-else>{{ row.netWeight }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="grossWeight" label="毛重 (kg)" width="100" align="right">
+              <template #default="{ row, $index }">
+                <el-input-number 
+                  v-if="editingIndex === $index + (currentPage - 1) * pageSize" 
+                  v-model="row.grossWeight" 
+                  size="small" 
+                  :min="0" 
+                  :precision="2" 
+                  style="width: 90px"
+                />
+                <span v-else>{{ row.grossWeight }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="grade" label="牌号" width="90" align="center">
+              <template #default="{ row, $index }">
+                <el-select 
+                  v-if="editingIndex === $index + (currentPage - 1) * pageSize" 
+                  v-model="row.grade" 
+                  size="small" 
+                  style="width: 80px"
+                >
+                  <el-option label="Ni9996" value="Ni9996" />
+                  <el-option label="Ni9990" value="Ni9990" />
+                  <el-option label="Ni9980" value="Ni9980" />
+                  <el-option label="Ni9950" value="Ni9950" />
+                </el-select>
+                <el-tag v-else size="small" :type="getGradeType(row.grade)">{{ row.grade }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="batchNo" label="批号" width="130">
+              <template #default="{ row, $index }">
+                <el-input 
+                  v-if="editingIndex === $index + (currentPage - 1) * pageSize" 
+                  v-model="row.batchNo" 
+                  size="small" 
+                  style="width: 120px"
+                />
+                <span v-else>{{ row.batchNo }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="date" label="日期" width="100" align="center">
+              <template #default="{ row, $index }">
+                <el-date-picker
+                  v-if="editingIndex === $index + (currentPage - 1) * pageSize"
+                  v-model="row.date"
+                  type="date"
+                  size="small"
+                  style="width: 90px"
+                  value-format="YYYY-MM-DD"
+                />
+                <span v-else>{{ row.date }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="170" fixed="right">
               <template #default="{ $index }">
-                <el-button link type="primary" size="small" @click="selectAIRecord($index + (currentPage - 1) * pageSize)">填充</el-button>
-                <el-button link type="success" size="small" @click="quickAddRecord($index + (currentPage - 1) * pageSize)">单条导入</el-button>
+                <template v-if="editingIndex === $index + (currentPage - 1) * pageSize">
+                  <el-button link type="success" size="small" @click="saveEdit($index)">保存</el-button>
+                  <el-button link type="info" size="small" @click="cancelEdit">取消</el-button>
+                </template>
+                <template v-else>
+                  <el-button link type="warning" size="small" @click="startEdit($index)">修正</el-button>
+                  <el-button link type="primary" size="small" @click="selectAIRecord($index + (currentPage - 1) * pageSize)">填充</el-button>
+                  <el-button link type="success" size="small" @click="quickAddRecord($index + (currentPage - 1) * pageSize)">导入</el-button>
+                </template>
               </template>
             </el-table-column>
           </el-table>
@@ -482,6 +566,21 @@ const currentPage = ref(1)
 const pageSize = ref(20)
 const selectAll = ref(false)
 const selectedRecords = ref([])
+
+// 编辑功能
+const editingIndex = ref<number | null>(null)
+const startEdit = (index: number) => {
+  editingIndex.value = index
+}
+
+const cancelEdit = () => {
+  editingIndex.value = null
+}
+
+const saveEdit = (index: number) => {
+  editingIndex.value = null
+  ElMessage.success('修改已保存')
+}
 
 // API 基础 URL
 const API_BASE = 'http://localhost:3001'
