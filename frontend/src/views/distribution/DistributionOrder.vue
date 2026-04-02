@@ -82,10 +82,6 @@
                 <el-icon><Plus /></el-icon>
                 新增库存
               </el-button>
-              <el-button type="warning" @click="handleAIRecognize">
-                <el-icon><PictureFilled /></el-icon>
-                AI 识别
-              </el-button>
             </div>
           </div>
 
@@ -269,10 +265,10 @@
       </template>
     </el-dialog>
 
-    <!-- 新增库存对话框 -->
+    <!-- 新增/编辑库存对话框 -->
     <el-dialog
       v-model="showAddInventory"
-      title="新增库存"
+      :title="editingInventoryId ? '编辑库存' : '新增库存'"
       width="800px"
     >
       <!-- AI 识别区域 -->
@@ -634,19 +630,94 @@ const submitOrder = async () => {
 // 提交库存
 const submitInventory = async () => {
   try {
-    // TODO: 调用 API
-    // await api.post('/distribution/inventory', inventoryForm)
-    ElMessage.success('库存添加成功')
+    const inventoryData = {
+      batchNo: inventoryForm.batchNo,
+      grade: inventoryForm.grade,
+      specification: inventoryForm.specification,
+      weight: inventoryForm.weight,
+      pieceCount: inventoryForm.pieceCount,
+      location: inventoryForm.location,
+      nickelContent: inventoryForm.nickelContent,
+      inspectionDate: inventoryForm.inspectionDate,
+    }
+    
+    if (editingInventoryId.value) {
+      // 更新现有库存
+      // TODO: 调用 API 更新
+      // await api.patch(`/distribution/inventory/${editingInventoryId.value}`, inventoryData)
+      ElMessage.success('库存更新成功')
+    } else {
+      // 新增库存
+      // TODO: 调用 API 创建
+      // await api.post('/distribution/inventory', inventoryData)
+      ElMessage.success('库存添加成功')
+    }
+    
+    // 重置表单和状态
     showAddInventory.value = false
+    editingInventoryId.value = null
+    resetInventoryForm()
     loadInventory()
-  } catch (error) {
-    ElMessage.error('添加失败')
+  } catch (error: any) {
+    ElMessage.error(editingInventoryId.value ? '更新失败' : '添加失败')
   }
+}
+
+const resetInventoryForm = () => {
+  inventoryForm.batchNo = ''
+  inventoryForm.grade = ''
+  inventoryForm.specification = ''
+  inventoryForm.weight = 0
+  inventoryForm.pieceCount = 0
+  inventoryForm.location = ''
+  inventoryForm.nickelContent = 0
+  inventoryForm.inspectionDate = ''
 }
 
 // 编辑库存
 const handleEditInventory = (row: any) => {
-  ElMessage.info('编辑功能开发中')
+  // 填充表单
+  editingInventoryId.value = row.id
+  inventoryForm.batchNo = row.tankNo || row.batchNo || ''
+  inventoryForm.grade = row.grade || 'Ni9996'
+  inventoryForm.specification = row.specification || '99.96%'
+  inventoryForm.weight = row.weight || row.concentration || 0
+  inventoryForm.pieceCount = row.pieceCount || 0
+  inventoryForm.location = row.location || ''
+  inventoryForm.nickelContent = row.nickelContent || row.concentration || 99.96
+  inventoryForm.inspectionDate = row.inspectionDate || formatDate(row.createdAt).split(' ')[0]
+  
+  showAddInventory.value = true
+  ElMessage.success('已加载库存信息，请编辑后保存')
+}
+
+const editingInventoryId = ref<number | null>(null)
+
+// 删除库存
+const handleDeleteInventory = async (row: any) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除批号为 "${row.tankNo || row.batchNo}" 的库存？`,
+      '删除确认',
+      { type: 'warning' }
+    )
+    
+    // TODO: 调用 API 删除
+    // await api.delete(`/distribution/inventory/${row.id}`)
+    
+    // 从列表中移除
+    const index = inventoryList.value.findIndex(item => item.id === row.id)
+    if (index !== -1) {
+      inventoryList.value.splice(index, 1)
+    }
+    
+    ElMessage.success('删除成功')
+    loadInventory()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败')
+    }
+  }
 }
 
 // 删除库存
@@ -759,12 +830,35 @@ const batchImportAll = async () => {
       // TODO: 调用 API 批量创建
       // await api.post('/distribution/inventory/batch', importData)
       
+      // 模拟添加到列表（实际应该调用 API）
+      importData.forEach(item => {
+        inventoryList.value.push({
+          id: Date.now() + Math.random(),
+          tankNo: item.batchNo,
+          batchNo: item.batchNo,
+          grade: item.grade,
+          specification: item.specification,
+          weight: item.weight,
+          pieceCount: item.pieceCount,
+          location: item.location,
+          nickelContent: item.nickelContent,
+          concentration: item.nickelContent,
+          status: 'available',
+          createdAt: new Date().toISOString(),
+        })
+      })
+      
       ElMessage.success(`成功导入 ${importData.length} 条记录`)
       aiRecognizedData.value = []
       selectedRecords.value = []
       selectAll.value = false
       showAddInventory.value = false
-      loadInventory()
+      editingInventoryId.value = null
+      resetInventoryForm()
+      
+      // 刷新统计
+      stats.totalInventory = inventoryList.value.length
+      stats.availableInventory = inventoryList.value.filter((i: any) => i.status === 'available').length
     } catch (error) {
       ElMessage.error('批量导入失败')
     } finally {
@@ -777,20 +871,32 @@ const batchImportAll = async () => {
 const quickAddRecord = async (index: number) => {
   const record = aiRecognizedData.value[index]
   try {
-    // TODO: 调用 API 单条创建
-    // await api.post('/distribution/inventory', {
-    //   batchNo: record.batchNo || `B${record.packageNo}`,
-    //   grade: record.grade || 'Ni9996',
-    //   specification: record.grade || '99.96%',
-    //   weight: record.netWeight || 0,
-    //   pieceCount: record.pieceCount || 0,
-    //   nickelContent: parseFloat(record.grade?.replace('Ni', '') || '99.96'),
-    //   inspectionDate: record.date || new Date().toISOString().split('T')[0],
-    // })
+    const newItem = {
+      id: Date.now(),
+      tankNo: record.batchNo || `B${record.packageNo}`,
+      batchNo: record.batchNo || `B${record.packageNo}`,
+      grade: record.grade || 'Ni9996',
+      specification: record.grade || '99.96%',
+      weight: record.netWeight || 0,
+      pieceCount: record.pieceCount || 0,
+      location: '',
+      nickelContent: parseFloat(record.grade?.replace('Ni', '') || '99.96'),
+      concentration: parseFloat(record.grade?.replace('Ni', '') || '99.96'),
+      status: 'available',
+      createdAt: new Date().toISOString(),
+    }
+    
+    // 添加到列表（实际应该调用 API）
+    inventoryList.value.push(newItem)
+    
+    // 从识别列表中移除
+    aiRecognizedData.value.splice(index, 1)
+    
+    // 刷新统计
+    stats.totalInventory = inventoryList.value.length
+    stats.availableInventory = inventoryList.value.filter((i: any) => i.status === 'available').length
     
     ElMessage.success('导入成功')
-    aiRecognizedData.value.splice(index, 1)
-    loadInventory()
   } catch (error) {
     ElMessage.error('导入失败')
   }
