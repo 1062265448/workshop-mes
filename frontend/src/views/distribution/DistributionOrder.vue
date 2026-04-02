@@ -750,13 +750,12 @@ const submitOrder = async () => {
 // 提交库存
 const submitInventory = async () => {
   try {
+    // 转换为后端需要的格式
     const inventoryData = {
-      batchNo: inventoryForm.batchNo,
-      grade: inventoryForm.grade,
-      specification: inventoryForm.specification,
-      weight: inventoryForm.weight,
-      pieceCount: inventoryForm.pieceCount,
-      inspectionDate: inventoryForm.inspectionDate,
+      tankNo: inventoryForm.batchNo,  // 批号 → tankNo
+      concentration: inventoryForm.grade ? parseFloat(inventoryForm.grade.replace('Ni', '')) : 99.96,  // 牌号 → concentration
+      temperature: 25,  // 默认温度
+      ph: 7,  // 默认 pH 值
     }
     
     if (editingInventoryId.value) {
@@ -776,7 +775,7 @@ const submitInventory = async () => {
     loadInventory()
   } catch (error: any) {
     ElMessage.error(editingInventoryId.value ? '更新失败' : '添加失败')
-    console.error('提交库存失败:', error)
+    console.error('提交库存失败:', error.response?.data || error.message)
   }
 }
 
