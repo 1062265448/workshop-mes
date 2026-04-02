@@ -292,6 +292,7 @@
           :headers="uploadHeaders"
           :on-success="handleAIRecognizeSuccess"
           :on-error="handleAIRecognizeError"
+          :on-progress="handleUploadProgress"
           :before-upload="beforeUpload"
           name="image"
           accept="image/*"
@@ -501,6 +502,20 @@
       </template>
     </el-dialog>
 
+    <!-- AI 识别进度悬浮窗 -->
+    <transition name="fade">
+      <div v-if="showRecognizing" class="recognizing-toast">
+        <div class="toast-content">
+          <el-icon class="toast-icon" :size="24"><Loading /></el-icon>
+          <div class="toast-text">
+            <div class="toast-title">🤖 正在识别库存表格...</div>
+            <div class="toast-detail">{{ recognizingDetail }}</div>
+          </div>
+        </div>
+        <el-progress :percentage="recognizeProgress" :stroke-width="4" :show-text="false" />
+      </div>
+    </transition>
+
     <!-- 批量导入对话框 -->
     <el-dialog
       v-model="showBatchImport"
@@ -550,6 +565,7 @@ import {
   PictureFilled,
   Download,
   Document,
+  Loading,
 } from '@element-plus/icons-vue'
 import * as distributionApi from '@/api/distribution'
 
@@ -565,6 +581,11 @@ const aiRecognizedData = ref([])
 const batchImportData = ref([])
 const showBatchImport = ref(false)
 const batchImporting = ref(false)
+
+// 识别进度
+const showRecognizing = ref(false)
+const recognizingDetail = ref('')
+const recognizeProgress = ref(0)
 
 // 分页和选择
 const currentPage = ref(1)
@@ -994,11 +1015,41 @@ const beforeUpload = (file: any) => {
     ElMessage.error('图片大小不能超过 10MB！')
   }
   
+  // 显示进度条
+  if (isImage && isLt10M) {
+    showRecognizing.value = true
+    recognizeProgress.value = 0
+    recognizingDetail.value = '准备上传图片...'
+    
+    // 模拟 AI 识别进度
+    setTimeout(() => {
+      if (showRecognizing.value) {
+        recognizeProgress.value = 50
+        recognizingDetail.value = '图片上传成功，正在调用 AI 识别...'
+      }
+    }, 2000)
+    
+    setTimeout(() => {
+      if (showRecognizing.value) {
+        recognizeProgress.value = 80
+        recognizingDetail.value = 'AI 正在分析表格数据...'
+      }
+    }, 5000)
+  }
+  
   return isImage && isLt10M
 }
 
 const handleAIRecognizeSuccess = async (response: any, uploadFile: any) => {
   try {
+    // 隐藏进度条
+    showRecognizing.value = false
+    recognizeProgress.value = 100
+    
+    setTimeout(() => {
+      showRecognizing.value = false
+    }, 1000)
+    
     if (response.success) {
       ElMessage.success(response.message)
       // 处理 AI 返回的数据结构
@@ -1017,12 +1068,22 @@ const handleAIRecognizeSuccess = async (response: any, uploadFile: any) => {
       ElMessage.error(response.message || 'AI 识别失败')
     }
   } catch (error) {
+    showRecognizing.value = false
     ElMessage.error('处理识别结果失败')
   }
 }
 
 const handleAIRecognizeError = () => {
+  showRecognizing.value = false
   ElMessage.error('上传失败，请重试')
+}
+
+// 上传进度
+const handleUploadProgress = (event: any) => {
+  if (event.percent !== undefined) {
+    recognizeProgress.value = Math.min(event.percent, 30) // 上传占 30%
+    recognizingDetail.value = `正在上传图片... ${Math.round(event.percent)}%`
+  }
 }
 
 const selectAIRecord = (index: number) => {
@@ -1273,6 +1334,89 @@ onMounted(() => {
 
 .ai-recognize-section :deep(.el-alert) {
   margin-bottom: 16px;
+}
+
+/* 识别进度悬浮窗 */
+.recognizing-toast {
+  position: fixed;
+  top: 80px;
+  right: 24px;
+  width: 320px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 10px 40px rgba(102, 126, 234, 0.4);
+  z-index: 9999;
+  color: #fff;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateX(400px);
+}
+
+.toast-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.toast-icon {
+  animation: rotate 2s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.toast-text {
+  flex: 1;
+}
+
+.toast-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.toast-detail {
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.recognizing-toast :deep(.el-progress__bar) {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+}
+
+.recognizing-toast :deep(.el-progress__inner) {
+  background: #fff;
+  border-radius: 2px;
 }
 
 .ai-preview {
