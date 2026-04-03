@@ -23,15 +23,14 @@
 
     <!-- 历史记录列表 -->
     <el-card class="main-card">
-      <div class="table-wrapper">
-        <el-table
-          :data="historyList"
-          v-loading="loading"
-          stripe
-          border
-          class="history-table"
-          @row-click="showDetail"
-        >
+      <el-table
+        :data="historyList"
+        v-loading="loading"
+        stripe
+        border
+        class="history-table"
+        @row-click="showDetail"
+      >
         <el-table-column prop="id" label="ID" width="60" align="center" />
         <el-table-column prop="itemCount" label="识别数量" width="100" align="center">
           <template #default="{ row }">
