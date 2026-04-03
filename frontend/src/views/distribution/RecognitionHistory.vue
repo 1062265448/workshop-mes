@@ -32,23 +32,6 @@
         @row-click="showDetail"
       >
         <el-table-column prop="id" label="ID" width="60" align="center" />
-        <el-table-column label="预览" width="100" align="center">
-          <template #default="{ row }">
-            <el-image
-              :src="getImageUrl(row.imageUrl)"
-              :preview-src-list="[getImageUrl(row.imageUrl)]"
-              fit="cover"
-              style="width: 60px; height: 60px; cursor: pointer"
-              :hide-on-click-modal="true"
-            >
-              <template #error>
-                <div class="image-error">
-                  <el-icon :size="20"><Picture /></el-icon>
-                </div>
-              </template>
-            </el-image>
-          </template>
-        </el-table-column>
         <el-table-column prop="itemCount" label="识别数量" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="row.itemCount > 0 ? 'success' : 'danger'">
@@ -73,13 +56,7 @@
             {{ formatDate(row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="120" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" @click.stop="showDetail(row)">
-              查看详情
-            </el-button>
-          </template>
-        </el-table-column>
+
       </el-table>
 
       <!-- 分页 -->
@@ -95,72 +72,21 @@
       />
     </el-card>
 
-    <!-- 详情对话框 -->
-    <el-dialog
-      v-model="showDetailDialog"
-      title="识别详情"
-      width="900px"
-    >
-      <el-row :gutter="20">
-        <el-col :span="12">
-          <h3>原始图片</h3>
-          <el-image
-            :src="getImageUrl(selectedRecord?.imageUrl)"
-            fit="contain"
-            style="width: 100%; max-height: 400px"
-            :preview-src-list="[getImageUrl(selectedRecord?.imageUrl)]"
-          >
-            <template #error>
-              <div class="image-error">
-                <el-icon :size="40"><Picture /></el-icon>
-                <p>图片加载失败</p>
-              </div>
-            </template>
-          </el-image>
-        </el-col>
-        <el-col :span="12">
-          <h3>识别结果</h3>
-          <el-table
-            :data="selectedRecord?.result || []"
-            border
-            size="small"
-            max-height="400"
-          >
-            <el-table-column prop="packageNo" label="包号" width="60" />
-            <el-table-column prop="pieceCount" label="块数" width="60" align="right" />
-            <el-table-column prop="netWeight" label="净重" width="80" align="right" />
-            <el-table-column prop="grossWeight" label="毛重" width="80" align="right" />
-            <el-table-column prop="grade" label="牌号" width="80" />
-            <el-table-column prop="batchNo" label="批号" width="120" />
-          </el-table>
-        </el-col>
-      </el-row>
-    </el-dialog>
+
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Document, Refresh, Back, Picture } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { Document, Refresh, Back } from '@element-plus/icons-vue'
 import * as distributionApi from '@/api/distribution'
-
-const API_BASE = 'http://localhost:3001'
-
-// 获取图片完整 URL
-const getImageUrl = (url: string | undefined) => {
-  if (!url) return ''
-  if (url.startsWith('http')) return url
-  return `${API_BASE}${url}`
-}
 
 const loading = ref(false)
 const historyList = ref([])
 const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
-const showDetailDialog = ref(false)
-const selectedRecord = ref<any>(null)
 
 // 加载历史记录
 const loadHistory = async () => {
@@ -189,12 +115,6 @@ const loadHistory = async () => {
   } finally {
     loading.value = false
   }
-}
-
-// 显示详情
-const showDetail = (row: any) => {
-  selectedRecord.value = row
-  showDetailDialog.value = true
 }
 
 // 格式化日期
@@ -270,22 +190,5 @@ h3 {
   font-size: 16px;
   font-weight: 600;
   color: #1e293b;
-}
-
-.image-error {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 60px;
-  height: 60px;
-  background: #f5f7fa;
-  border-radius: 4px;
-  color: #909399;
-}
-
-.image-error p {
-  margin: 4px 0 0 0;
-  font-size: 10px;
 }
 </style>
