@@ -268,4 +268,10 @@ export class DistributionService {
     ]);
     return { data, total, page, limit };
   }
+
+  async deleteRecognitionHistory(id: number) {
+    return this.prisma.aiRecognitionHistory.delete({
+      where: { id },
+    });
+  }
 }

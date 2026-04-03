@@ -35,8 +35,8 @@
         <el-table-column label="预览" width="100" align="center">
           <template #default="{ row }">
             <el-image
-              :src="`${API_BASE}${row.imageUrl}`"
-              :preview-src-list="[`${API_BASE}${row.imageUrl}`]"
+              :src="row.imageUrl?.startsWith('http') ? row.imageUrl : `${API_BASE}${row.imageUrl}`"
+              :preview-src-list="[row.imageUrl?.startsWith('http') ? row.imageUrl : `${API_BASE}${row.imageUrl}`]"
               fit="cover"
               style="width: 60px; height: 60px; cursor: pointer"
             />
@@ -66,10 +66,13 @@
             {{ formatDate(row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="120" fixed="right">
+        <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click.stop="showDetail(row)">
               查看详情
+            </el-button>
+            <el-button link type="danger" @click.stop="deleteHistory(row)">
+              删除
             </el-button>
           </template>
         </el-table-column>
@@ -98,9 +101,10 @@
         <el-col :span="12">
           <h3>原始图片</h3>
           <el-image
-            :src="`${API_BASE}${selectedRecord?.imageUrl}`"
+            :src="selectedRecord?.imageUrl?.startsWith('http') ? selectedRecord.imageUrl : `${API_BASE}${selectedRecord?.imageUrl}`"
             fit="contain"
             style="width: 100%; max-height: 400px"
+            :preview-src-list="[selectedRecord?.imageUrl?.startsWith('http') ? selectedRecord.imageUrl : `${API_BASE}${selectedRecord?.imageUrl}`]"
           />
         </el-col>
         <el-col :span="12">
@@ -173,6 +177,33 @@ const loadHistory = async () => {
 const showDetail = (row: any) => {
   selectedRecord.value = row
   showDetailDialog.value = true
+}
+
+// 删除历史记录
+const deleteHistory = async (row: any) => {
+  try {
+    await ElMessage.confirm(
+      `确定删除这条识别历史记录？`,
+      '删除确认',
+      { type: 'warning' }
+    )
+    
+    // TODO: 调用 API 删除
+    // await distributionApi.api.delete(`/distribution/recognition-history/${row.id}`)
+    
+    // 从列表中移除
+    const index = historyList.value.findIndex(item => item.id === row.id)
+    if (index !== -1) {
+      historyList.value.splice(index, 1)
+      total.value--
+    }
+    
+    ElMessage.success('删除成功')
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败')
+    }
+  }
 }
 
 // 格式化日期

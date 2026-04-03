@@ -65,6 +65,11 @@ export class DistributionController {
     return this.distributionService.getRecognitionHistory(page || 1, limit || 20);
   }
 
+  @Delete('recognition-history/:id')
+  async deleteRecognitionHistory(@Param('id', new ParseIntPipe()) id: number) {
+    return this.distributionService.deleteRecognitionHistory(id);
+  }
+
   @Post('inventory/ai-recognize')
   @UseInterceptors(
     FileInterceptor('image', {
