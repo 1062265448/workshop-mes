@@ -62,26 +62,33 @@ export class DistributionService {
   }
 
   async updateInventory(id: number, dto: any) {
-    // 字段映射：前端 → Prisma 模型
-    const updateData: any = {}
-    
-    if (dto.tankNo !== undefined) {
-      updateData.tankNo = dto.tankNo
+    try {
+      // 字段映射：前端 → Prisma 模型
+      const updateData: any = {}
+      
+      if (dto.tankNo !== undefined) {
+        updateData.tankNo = dto.tankNo
+      }
+      if (dto.concentration !== undefined) {
+        updateData.concentration = parseFloat(dto.concentration)
+      }
+      if (dto.temperature !== undefined) {
+        updateData.temperature = parseFloat(dto.temperature)
+      }
+      if (dto.ph !== undefined) {
+        updateData.ph = parseFloat(dto.ph)
+      }
+      
+      this.logger.log(`📝 更新库存 ID=${id}, 数据:`, updateData)
+      
+      return this.prisma.nickelInventory.update({
+        where: { id },
+        data: updateData,
+      });
+    } catch (error: any) {
+      this.logger.error(`❌ 更新库存失败 ID=${id}:`, error.message)
+      throw error
     }
-    if (dto.concentration !== undefined) {
-      updateData.concentration = parseFloat(dto.concentration)
-    }
-    if (dto.temperature !== undefined) {
-      updateData.temperature = parseFloat(dto.temperature)
-    }
-    if (dto.ph !== undefined) {
-      updateData.ph = parseFloat(dto.ph)
-    }
-    
-    return this.prisma.nickelInventory.update({
-      where: { id },
-      data: updateData,
-    });
   }
 
   async batchCreateInventory(items: CreateInventoryDto[]) {
