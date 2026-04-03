@@ -246,15 +246,17 @@ onMounted(() => {
 }
 
 .main-card :deep(.el-card__body) {
-  padding: 0;
+  padding: 0 !important;
 }
 
 .history-table {
   width: 100%;
 }
 
-.history-table :deep(.el-table) {
-  width: 100%;
+.history-table :deep(.el-table),
+.history-table :deep(.el-table__inner-wrapper),
+.history-table :deep(.el-table__body-wrapper) {
+  width: 100% !important;
 }
 
 .history-table :deep(.el-table__header th) {
