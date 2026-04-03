@@ -23,14 +23,15 @@
 
     <!-- 历史记录列表 -->
     <el-card class="main-card">
-      <el-table
-        :data="historyList"
-        v-loading="loading"
-        stripe
-        border
-        class="history-table"
-        @row-click="showDetail"
-      >
+      <div class="table-wrapper">
+        <el-table
+          :data="historyList"
+          v-loading="loading"
+          stripe
+          border
+          class="history-table"
+          @row-click="showDetail"
+        >
         <el-table-column prop="id" label="ID" width="60" align="center" />
         <el-table-column prop="itemCount" label="识别数量" width="100" align="center">
           <template #default="{ row }">
@@ -83,7 +84,6 @@
         class="pagination"
         @change="loadHistory"
         @size-change="loadHistory"
-        style="justify-content: flex-end"
       />
     </el-card>
 
@@ -254,26 +254,10 @@ onMounted(() => {
   font-weight: 600;
 }
 
-.history-table :deep(.el-table) {
-  width: 100%;
-}
-
 .pagination {
   margin-top: 24px;
   display: flex;
   justify-content: flex-end;
-}
-
-/* 确保表格右侧与分页器对齐 */
-.history-table :deep(.el-table__inner-wrapper) {
-  width: 100%;
-}
-
-.history-table :deep(.el-table__body) {
-  width: 100%;
-}
-
-.history-table :deep(.el-table__header) {
   width: 100%;
 }
 
