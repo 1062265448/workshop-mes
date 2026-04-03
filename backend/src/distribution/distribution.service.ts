@@ -61,11 +61,26 @@ export class DistributionService {
     });
   }
 
-  async updateInventory(id: number, dto: { status?: string; location?: string }) {
-    // NickelInventory 没有 status 和 location 字段，忽略
+  async updateInventory(id: number, dto: any) {
+    // 字段映射：前端 → Prisma 模型
+    const updateData: any = {}
+    
+    if (dto.tankNo !== undefined) {
+      updateData.tankNo = dto.tankNo
+    }
+    if (dto.concentration !== undefined) {
+      updateData.concentration = parseFloat(dto.concentration)
+    }
+    if (dto.temperature !== undefined) {
+      updateData.temperature = parseFloat(dto.temperature)
+    }
+    if (dto.ph !== undefined) {
+      updateData.ph = parseFloat(dto.ph)
+    }
+    
     return this.prisma.nickelInventory.update({
       where: { id },
-      data: {},
+      data: updateData,
     });
   }
 
