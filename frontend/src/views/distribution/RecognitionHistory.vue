@@ -46,9 +46,17 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="errorMessage" label="错误信息" min-width="200" show-overflow-tooltip>
+        <el-table-column prop="errorMessage" label="错误信息" width="250" show-overflow-tooltip>
           <template #default="{ row }">
-            {{ row.errorMessage || '-' }}
+            <el-tag 
+              v-if="row.errorMessage" 
+              type="danger" 
+              size="small"
+              effect="plain"
+            >
+              {{ truncateText(row.errorMessage, 30) }}
+            </el-tag>
+            <span v-else style="color: #909399">-</span>
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="识别时间" width="180">
@@ -174,6 +182,13 @@ const loadHistory = async () => {
 const showDetail = (row: any) => {
   selectedRecord.value = row
   showDetailDialog.value = true
+}
+
+// 截断文本
+const truncateText = (text: string, maxLength: number) => {
+  if (!text) return ''
+  if (text.length <= maxLength) return text
+  return text.substring(0, maxLength) + '...'
 }
 
 // 格式化日期
