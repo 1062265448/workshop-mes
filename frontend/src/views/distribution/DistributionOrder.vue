@@ -123,7 +123,6 @@
                 {{ row.tankNo || row.batchNo || '-' }}
               </template>
             </el-table-column>
-            <el-table-column label="操作" fixed="right" width="120">
             <el-table-column label="操作" fixed="right" width="180">
               <template #default="{ row }">
                 <el-button link type="primary" @click="handleEditInventory(row)">编辑</el-button>
