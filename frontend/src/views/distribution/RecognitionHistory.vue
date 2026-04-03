@@ -10,6 +10,16 @@
         <p class="page-desc">查看历史识别记录和结果</p>
       </div>
       <div class="header-actions">
+        <el-button 
+          type="danger" 
+          plain 
+          size="small"
+          :disabled="selectedHistory.length === 0"
+          @click="batchDeleteHistory"
+        >
+          <el-icon><Delete /></el-icon>
+          批量删除 ({{ selectedHistory.length }})
+        </el-button>
         <el-button @click="loadHistory">
           <el-icon><Refresh /></el-icon>
           刷新
@@ -29,8 +39,9 @@
         stripe
         border
         class="history-table"
-        @row-click="showDetail"
+        @selection-change="handleHistorySelectionChange"
       >
+        <el-table-column type="selection" width="50" />
         <el-table-column prop="id" label="ID" width="60" align="center" />
         <el-table-column prop="itemCount" label="识别数量" width="100" align="center">
           <template #default="{ row }">
@@ -124,8 +135,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Document, Refresh, Back } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Document, Refresh, Back, Delete } from '@element-plus/icons-vue'
 import * as distributionApi from '@/api/distribution'
 
 const loading = ref(false)
@@ -135,6 +146,7 @@ const pageSize = ref(20)
 const total = ref(0)
 const showDetailDialog = ref(false)
 const selectedRecord = ref<any>(null)
+const selectedHistory = ref([])
 
 // 获取牌号类型
 const getGradeType = (grade: string) => {
@@ -182,6 +194,40 @@ const loadHistory = async () => {
 const showDetail = (row: any) => {
   selectedRecord.value = row
   showDetailDialog.value = true
+}
+
+// 历史选择变化
+const handleHistorySelectionChange = (selection: any[]) => {
+  selectedHistory.value = selection
+}
+
+// 批量删除历史
+const batchDeleteHistory = async () => {
+  if (selectedHistory.value.length === 0) {
+    ElMessage.warning('请选择要删除的识别记录')
+    return
+  }
+  
+  try {
+    await ElMessageBox.confirm(
+      `确定删除选中的 ${selectedHistory.value.length} 条识别记录？`,
+      '批量删除确认',
+      { type: 'warning' }
+    )
+    
+    // 批量删除
+    for (const record of selectedHistory.value) {
+      await distributionApi.api.delete(`/distribution/recognition-history/${record.id}`)
+    }
+    
+    ElMessage.success(`成功删除 ${selectedHistory.value.length} 条记录`)
+    selectedHistory.value = []
+    loadHistory()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error('批量删除失败：' + (error.response?.data?.message || error.message))
+    }
+  }
 }
 
 // 截断文本

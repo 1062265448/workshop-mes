@@ -161,7 +161,9 @@
             stripe
             border
             class="data-table"
+            @selection-change="handleOrderSelectionChange"
           >
+            <el-table-column type="selection" width="50" />
             <el-table-column prop="orderNo" label="配货单号" width="180" />
             <el-table-column prop="customerName" label="客户" width="150" />
             <el-table-column prop="productName" label="产品" width="100" />
@@ -569,6 +571,7 @@ import {
   Download,
   Document,
   Loading,
+  Delete,
 } from '@element-plus/icons-vue'
 import * as distributionApi from '@/api/distribution'
 import { compressImage, generateThumbnail } from '@/utils/imageCompressor'
@@ -651,6 +654,7 @@ const orderForm = reactive({
   targetGrade: '',
   remark: '',
 })
+const selectedOrders = ref([])
 
 // 选中的库存
 const selectedInventory = ref([])
