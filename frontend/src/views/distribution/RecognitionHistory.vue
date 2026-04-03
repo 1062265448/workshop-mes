@@ -35,11 +35,18 @@
         <el-table-column label="预览" width="100" align="center">
           <template #default="{ row }">
             <el-image
-              :src="row.imageUrl?.startsWith('http') ? row.imageUrl : `${API_BASE}${row.imageUrl}`"
-              :preview-src-list="[row.imageUrl?.startsWith('http') ? row.imageUrl : `${API_BASE}${row.imageUrl}`]"
+              :src="getImageUrl(row.imageUrl)"
+              :preview-src-list="[getImageUrl(row.imageUrl)]"
               fit="cover"
               style="width: 60px; height: 60px; cursor: pointer"
-            />
+              :hide-on-click-modal="true"
+            >
+              <template #error>
+                <div class="image-error">
+                  <el-icon :size="20"><Picture /></el-icon>
+                </div>
+              </template>
+            </el-image>
           </template>
         </el-table-column>
         <el-table-column prop="itemCount" label="识别数量" width="100" align="center">
@@ -101,11 +108,18 @@
         <el-col :span="12">
           <h3>原始图片</h3>
           <el-image
-            :src="selectedRecord?.imageUrl?.startsWith('http') ? selectedRecord.imageUrl : `${API_BASE}${selectedRecord?.imageUrl}`"
+            :src="getImageUrl(selectedRecord?.imageUrl)"
             fit="contain"
             style="width: 100%; max-height: 400px"
-            :preview-src-list="[selectedRecord?.imageUrl?.startsWith('http') ? selectedRecord.imageUrl : `${API_BASE}${selectedRecord?.imageUrl}`]"
-          />
+            :preview-src-list="[getImageUrl(selectedRecord?.imageUrl)]"
+          >
+            <template #error>
+              <div class="image-error">
+                <el-icon :size="40"><Picture /></el-icon>
+                <p>图片加载失败</p>
+              </div>
+            </template>
+          </el-image>
         </el-col>
         <el-col :span="12">
           <h3>识别结果</h3>
@@ -131,10 +145,17 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Document, Refresh, Back } from '@element-plus/icons-vue'
+import { Document, Refresh, Back, Picture } from '@element-plus/icons-vue'
 import * as distributionApi from '@/api/distribution'
 
 const API_BASE = 'http://localhost:3001'
+
+// 获取图片完整 URL
+const getImageUrl = (url: string | undefined) => {
+  if (!url) return ''
+  if (url.startsWith('http')) return url
+  return `${API_BASE}${url}`
+}
 
 const loading = ref(false)
 const historyList = ref([])
@@ -279,5 +300,22 @@ h3 {
   font-size: 16px;
   font-weight: 600;
   color: #1e293b;
+}
+
+.image-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  color: #909399;
+}
+
+.image-error p {
+  margin: 4px 0 0 0;
+  font-size: 10px;
 }
 </style>

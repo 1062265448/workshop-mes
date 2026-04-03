@@ -299,6 +299,7 @@
           :on-error="handleAIRecognizeError"
           :on-progress="handleUploadProgress"
           :before-upload="beforeUpload"
+          :http-request="handleCustomUpload"
           name="image"
           accept="image/*"
           drag
@@ -573,6 +574,7 @@ import {
   Loading,
 } from '@element-plus/icons-vue'
 import * as distributionApi from '@/api/distribution'
+import { compressImage, generateThumbnail } from '@/utils/imageCompressor'
 
 // 状态
 const activeTab = ref('inventory')
@@ -1130,6 +1132,51 @@ const handleAIRecognizeSuccess = async (response: any, uploadFile: any) => {
   } catch (error) {
     showRecognizing.value = false
     ElMessage.error('处理识别结果失败')
+  }
+}
+
+// 自定义上传处理（带压缩）
+const handleCustomUpload = async (file: any) => {
+  try {
+    showRecognizing.value = true
+    recognizeProgress.value = 0
+    recognizingDetail.value = '正在压缩图片...'
+    
+    // 压缩图片
+    const compressed = await compressImage(file.file, {
+      maxWidth: 1920,
+      maxHeight: 1920,
+      quality: 0.85,
+    })
+    
+    recognizeProgress.value = 30
+    recognizingDetail.value = '图片压缩完成，正在上传...'
+    
+    // 生成缩略图
+    const thumbnail = await generateThumbnail(file.file, 200)
+    
+    recognizeProgress.value = 50
+    recognizingDetail.value = '缩略图生成完成，正在识别...'
+    
+    // 创建 FormData 上传
+    const formData = new FormData()
+    formData.append('image', compressed.blob, file.file.name)
+    
+    const response = await fetch(`${API_BASE}/distribution/inventory/ai-recognize`, {
+      method: 'POST',
+      body: formData,
+    })
+    
+    recognizeProgress.value = 80
+    
+    const result = await response.json()
+    handleAIRecognizeSuccess(result, file)
+    
+    return true
+  } catch (error) {
+    console.error('上传失败:', error)
+    handleAIRecognizeError()
+    return false
   }
 }
 
