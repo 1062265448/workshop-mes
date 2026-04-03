@@ -141,23 +141,15 @@ export class DistributionService {
         orderNo,
         customerId,
         customerName: dto.customerName,
-        productSpec: dto.productSpec,
-        targetGrade: dto.targetGrade,
         itemsCount: dto.items?.length || 0,
       });
 
-      // 创建配货单
+      // 创建配货单（只使用 schema 中存在的字段）
       const order = await this.prisma.distributionOrder.create({
         data: {
           orderNo,
           customerId: customerId!,
-          productSpec: dto.productSpec || '',
-          targetGrade: dto.targetGrade || '',
-          remark: dto.remark || '',
           items: JSON.stringify(dto.items ?? []),
-          totalWeight,
-          totalPieces,
-          totalPackages: dto.items?.length || 0,
           status: 'pending',
         },
       });
