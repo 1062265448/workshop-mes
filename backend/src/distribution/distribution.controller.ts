@@ -70,6 +70,8 @@ export class DistributionController {
     return this.distributionService.deleteRecognitionHistory(id);
   }
 
+  // ==================== 库存管理 ====================
+
   @Post('inventory/ai-recognize')
   @UseInterceptors(
     FileInterceptor('image', {
@@ -208,5 +210,20 @@ export class DistributionController {
     @Body() dto: any,
   ) {
     return this.distributionService.updateOrder(id, dto);
+  }
+
+  // ==================== AI 识别历史 ====================
+
+  @Get('recognition-history')
+  async getRecognitionHistory(
+    @Query('page', new ParseIntPipe({ optional: true })) page?: number,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+  ) {
+    return this.distributionService.getRecognitionHistory(page || 1, limit || 20);
+  }
+
+  @Delete('recognition-history/:id')
+  async deleteRecognitionHistory(@Param('id', new ParseIntPipe()) id: number) {
+    return this.distributionService.deleteRecognitionHistory(id);
   }
 }
