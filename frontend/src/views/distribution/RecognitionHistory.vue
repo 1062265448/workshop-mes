@@ -30,7 +30,6 @@
         border
         class="history-table"
         @row-click="showDetail"
-        style="width: 100%"
       >
         <el-table-column prop="id" label="ID" width="60" align="center" />
         <el-table-column prop="itemCount" label="识别数量" width="100" align="center">
@@ -263,7 +262,6 @@ onMounted(() => {
   margin-top: 24px;
   display: flex;
   justify-content: flex-end;
-  width: 100%;
 }
 
 h3 {
