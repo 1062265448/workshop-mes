@@ -96,11 +96,6 @@
             border
             class="data-table"
           >
-            <el-table-column label="批号" width="150">
-              <template #default="{ row }">
-                {{ row.tankNo || row.batchNo }}
-              </template>
-            </el-table-column>
             <el-table-column label="品级" width="100">
               <template #default="{ row }">
                 <el-tag :type="getGradeType(row.grade || `Ni${Math.round((row.concentration || 99.96) * 100)}`)">
@@ -108,24 +103,27 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="浓度 (%)" width="100" align="right">
+            <el-table-column label="规格" width="120">
               <template #default="{ row }">
-                {{ (parseFloat(row.concentration) || 99.96).toFixed(2) }}
+                {{ row.specification || `${(parseFloat(row.concentration) || 99.96).toFixed(2)}%` }}
               </template>
             </el-table-column>
-            <el-table-column label="温度 (°C)" width="100" align="right">
+            <el-table-column label="重量 (kg)" width="100" align="right">
               <template #default="{ row }">
-                {{ (parseFloat(row.temperature) || 25).toFixed(1) }}
+                {{ (row.weight || 0).toFixed(2) }}
               </template>
             </el-table-column>
-            <el-table-column label="pH 值" width="80" align="right">
+            <el-table-column label="片数" width="80" align="right">
               <template #default="{ row }">
-                {{ (parseFloat(row.ph) || 7).toFixed(1) }}
+                {{ row.pieceCount || 0 }}
               </template>
             </el-table-column>
-            <el-table-column label="入库时间" width="160">
-              <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
+            <el-table-column label="批号" width="140">
+              <template #default="{ row }">
+                {{ row.tankNo || row.batchNo || '-' }}
+              </template>
             </el-table-column>
+            <el-table-column label="操作" fixed="right" width="120">
             <el-table-column label="操作" fixed="right" width="180">
               <template #default="{ row }">
                 <el-button link type="primary" @click="handleEditInventory(row)">编辑</el-button>
