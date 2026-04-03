@@ -150,8 +150,7 @@ export class DistributionService {
       const order = await this.prisma.distributionOrder.create({
         data: {
           orderNo,
-          customerId: customerId ?? undefined,
-          customerName: dto.customerName || '未知客户',
+          customerId: customerId!,
           productSpec: dto.productSpec || '',
           targetGrade: dto.targetGrade || '',
           remark: dto.remark || '',

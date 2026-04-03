@@ -216,7 +216,7 @@
       <el-form :model="orderForm" label-width="120px">
         <el-row :gutter="16">
           <el-col :span="12">
-            <el-form-item label="客户名称">
+            <el-form-item label="客户名称" required>
               <el-input v-model="orderForm.customerName" placeholder="输入客户名称" />
             </el-form-item>
           </el-col>
@@ -756,6 +756,17 @@ const handleSelectionChange = (selection: any[]) => {
 // 提交配货单
 const submitOrder = async () => {
   try {
+    // 验证必填字段
+    if (!orderForm.customerName) {
+      ElMessage.warning('请输入客户名称')
+      return
+    }
+    
+    if (selectedInventory.value.length === 0) {
+      ElMessage.warning('请选择至少一个库存')
+      return
+    }
+    
     console.log('提交配货单数据:', {
       customerName: orderForm.customerName,
       productSpec: orderForm.productSpec,
