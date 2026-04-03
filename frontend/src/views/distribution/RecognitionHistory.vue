@@ -56,7 +56,13 @@
             {{ formatDate(row.createdAt) }}
           </template>
         </el-table-column>
-
+        <el-table-column label="操作" width="120" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click.stop="showDetail(row)">
+              查看详情
+            </el-button>
+          </template>
+        </el-table-column>
       </el-table>
 
       <!-- 分页 -->
@@ -72,7 +78,39 @@
       />
     </el-card>
 
-
+    <!-- 详情对话框 -->
+    <el-dialog
+      v-model="showDetailDialog"
+      title="识别详情"
+      width="800px"
+    >
+      <h3>识别结果明细</h3>
+      <el-table
+        :data="selectedRecord?.result || []"
+        border
+        size="small"
+        max-height="500"
+        stripe
+      >
+        <el-table-column prop="packageNo" label="包号" width="80" align="center" />
+        <el-table-column prop="pieceCount" label="块数" width="80" align="right" />
+        <el-table-column prop="netWeight" label="净重 (kg)" width="100" align="right" />
+        <el-table-column prop="netWeightSubtotal" label="净重小计" width="100" align="right" />
+        <el-table-column prop="grossWeight" label="毛重 (kg)" width="100" align="right" />
+        <el-table-column prop="grade" label="牌号" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag size="small" :type="getGradeType(row.grade)">{{ row.grade }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="batchNo" label="批号" width="140" />
+        <el-table-column prop="inspector" label="计量员" width="100" align="center" />
+        <el-table-column prop="date" label="日期" width="110" align="center" />
+      </el-table>
+      
+      <template #footer>
+        <el-button @click="showDetailDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -87,6 +125,21 @@ const historyList = ref([])
 const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+const showDetailDialog = ref(false)
+const selectedRecord = ref<any>(null)
+
+// 获取牌号类型
+const getGradeType = (grade: string) => {
+  const map: any = {
+    'Ni9996': 'success',
+    'Ni9990': 'primary',
+    'Ni9980': 'warning',
+    'Ni9950': 'info',
+  }
+  return map[grade] || 'info'
+}
+
+
 
 // 加载历史记录
 const loadHistory = async () => {
@@ -115,6 +168,12 @@ const loadHistory = async () => {
   } finally {
     loading.value = false
   }
+}
+
+// 显示详情
+const showDetail = (row: any) => {
+  selectedRecord.value = row
+  showDetailDialog.value = true
 }
 
 // 格式化日期
@@ -190,5 +249,9 @@ h3 {
   font-size: 16px;
   font-weight: 600;
   color: #1e293b;
+}
+
+.el-dialog :deep(.el-dialog__body) {
+  padding: 20px;
 }
 </style>
