@@ -64,7 +64,7 @@
             {{ formatDate(row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="120" fixed="right">
+        <el-table-column label="操作" width="150" fixed="right" align="center">
           <template #default="{ row }">
             <el-button link type="primary" @click.stop="showDetail(row)">
               查看详情
@@ -262,6 +262,19 @@ onMounted(() => {
   margin-top: 24px;
   display: flex;
   justify-content: flex-end;
+}
+
+/* 确保表格右侧与分页器对齐 */
+.history-table :deep(.el-table__inner-wrapper) {
+  width: 100%;
+}
+
+.history-table :deep(.el-table__body) {
+  width: 100%;
+}
+
+.history-table :deep(.el-table__header) {
+  width: 100%;
 }
 
 h3 {
