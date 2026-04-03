@@ -73,13 +73,10 @@
             {{ formatDate(row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="120" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click.stop="showDetail(row)">
               查看详情
-            </el-button>
-            <el-button link type="danger" @click.stop="deleteHistory(row)">
-              删除
             </el-button>
           </template>
         </el-table-column>
@@ -198,34 +195,6 @@ const loadHistory = async () => {
 const showDetail = (row: any) => {
   selectedRecord.value = row
   showDetailDialog.value = true
-}
-
-// 删除历史记录
-const deleteHistory = async (row: any) => {
-  try {
-    await ElMessageBox.confirm(
-      `确定删除这条识别历史记录？`,
-      '删除确认',
-      { type: 'warning' }
-    )
-    
-    // 调用 API 删除
-    await distributionApi.api.delete(`/distribution/recognition-history/${row.id}`)
-    
-    // 从列表中移除
-    const index = historyList.value.findIndex(item => item.id === row.id)
-    if (index !== -1) {
-      historyList.value.splice(index, 1)
-      total.value--
-    }
-    
-    ElMessage.success('删除成功')
-  } catch (error: any) {
-    console.error('删除失败:', error)
-    if (error !== 'cancel') {
-      ElMessage.error('删除失败：' + (error.response?.data?.message || error.message))
-    }
-  }
 }
 
 // 格式化日期

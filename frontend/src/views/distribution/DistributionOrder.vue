@@ -1114,18 +1114,47 @@ const handleAIRecognizeSuccess = async (response: any, uploadFile: any) => {
     
     if (response.success) {
       ElMessage.success(response.message)
+      
       // 处理 AI 返回的数据结构
+      let items = []
+      let batchNo = ''
+      let grade = ''
+      let date = ''
+      
       if (response.data && Array.isArray(response.data)) {
-        aiRecognizedData.value = response.data
+        items = response.data
+        // 从第一条数据中提取批号
+        batchNo = response.data[0]?.batchNo || ''
+        grade = response.data[0]?.grade || ''
+        date = response.data[0]?.date || ''
       } else if (response.data && response.data.items) {
         // 如果是新的格式 { batchNo, grade, date, items }
-        aiRecognizedData.value = response.data.items.map((item: any) => ({
+        items = response.data.items.map((item: any) => ({
           ...item,
           batchNo: response.data.batchNo,
           grade: response.data.grade,
           date: response.data.date,
         }))
+        batchNo = response.data.batchNo || ''
+        grade = response.data.grade || ''
+        date = response.data.date || ''
       }
+      
+      aiRecognizedData.value = items
+      
+      // 自动将批号填入表单
+      if (batchNo) {
+        inventoryForm.batchNo = batchNo
+      }
+      if (grade) {
+        inventoryForm.grade = grade
+        inventoryForm.specification = `${grade.replace('Ni', '')}%`
+      }
+      if (date) {
+        inventoryForm.inspectionDate = date
+      }
+      
+      ElMessage.success(`识别成功！已自动填入批号：${batchNo}`)
     } else {
       ElMessage.error(response.message || 'AI 识别失败')
     }
