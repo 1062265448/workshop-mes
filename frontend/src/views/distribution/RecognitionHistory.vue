@@ -23,16 +23,16 @@
 
     <!-- 历史记录列表 -->
     <el-card class="main-card">
-      <div class="table-container">
-        <el-table
-          :data="historyList"
-          v-loading="loading"
-          stripe
-          border
-          class="history-table"
-          @row-click="showDetail"
-        >
+      <el-table
+        :data="historyList"
+        v-loading="loading"
+        stripe
+        border
+        class="history-table"
+        @row-click="showDetail"
+      >
         <el-table-column prop="id" label="ID" width="60" align="center" />
+        <el-table-column prop="itemCount" label="识别数量" width="100" align="center">
         <el-table-column prop="itemCount" label="识别数量" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="row.itemCount > 0 ? 'success' : 'danger'">
@@ -85,7 +85,6 @@
         @change="loadHistory"
         @size-change="loadHistory"
       />
-      </div>
     </el-card>
 
     <!-- 详情对话框 -->
@@ -246,13 +245,16 @@ onMounted(() => {
   border-radius: 16px;
 }
 
-.table-container {
-  width: 100%;
+.main-card :deep(.el-card__body) {
+  padding: 0;
 }
 
 .history-table {
   width: 100%;
-  table-layout: fixed;
+}
+
+.history-table :deep(.el-table) {
+  width: 100%;
 }
 
 .history-table :deep(.el-table__header th) {
