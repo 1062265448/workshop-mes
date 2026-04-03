@@ -30,6 +30,7 @@
         border
         class="history-table"
         @row-click="showDetail"
+        style="width: 100%"
       >
         <el-table-column prop="id" label="ID" width="60" align="center" />
         <el-table-column prop="itemCount" label="识别数量" width="100" align="center">
@@ -83,6 +84,7 @@
         class="pagination"
         @change="loadHistory"
         @size-change="loadHistory"
+        style="justify-content: flex-end"
       />
     </el-card>
 
@@ -253,10 +255,15 @@ onMounted(() => {
   font-weight: 600;
 }
 
+.history-table :deep(.el-table) {
+  width: 100%;
+}
+
 .pagination {
   margin-top: 24px;
   display: flex;
   justify-content: flex-end;
+  width: 100%;
 }
 
 h3 {
