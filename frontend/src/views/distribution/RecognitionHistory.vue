@@ -144,7 +144,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document, Refresh, Back, Picture } from '@element-plus/icons-vue'
 import * as distributionApi from '@/api/distribution'
 
@@ -203,7 +203,7 @@ const showDetail = (row: any) => {
 // 删除历史记录
 const deleteHistory = async (row: any) => {
   try {
-    await ElMessage.confirm(
+    await ElMessageBox.confirm(
       `确定删除这条识别历史记录？`,
       '删除确认',
       { type: 'warning' }
