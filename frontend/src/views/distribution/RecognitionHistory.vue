@@ -33,7 +33,6 @@
       >
         <el-table-column prop="id" label="ID" width="60" align="center" />
         <el-table-column prop="itemCount" label="识别数量" width="100" align="center">
-        <el-table-column prop="itemCount" label="识别数量" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="row.itemCount > 0 ? 'success' : 'danger'">
               {{ row.itemCount }} 条
