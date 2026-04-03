@@ -152,6 +152,16 @@
                 <el-option label="已发货" value="shipped" />
                 <el-option label="已完成" value="completed" />
               </el-select>
+              <el-button 
+                type="danger" 
+                plain 
+                size="small"
+                :disabled="selectedOrders.length === 0"
+                @click="batchDeleteOrders"
+              >
+                <el-icon><Delete /></el-icon>
+                批量删除 ({{ selectedOrders.length }})
+              </el-button>
             </div>
           </div>
 
@@ -187,7 +197,7 @@
                 <el-button link type="primary" @click="handleViewOrder(row)">查看</el-button>
                 <el-button link type="success" @click="handleExportOrder(row)">导出</el-button>
                 <el-button link type="warning" v-if="row.status === 'draft'" @click="handleConfirmOrder(row)">确认</el-button>
-                <el-button link type="danger" v-if="row.status === 'draft'" @click="handleDeleteOrder(row)">删除</el-button>
+                <el-button link type="danger" @click="handleDeleteOrder(row)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -928,6 +938,40 @@ const handleDeleteOrder = async (row: any) => {
   } catch (error: any) {
     if (error !== 'cancel') {
       ElMessage.error('删除失败：' + (error.response?.data?.message || error.message))
+    }
+  }
+}
+
+// 订单选择变化
+const handleOrderSelectionChange = (selection: any[]) => {
+  selectedOrders.value = selection
+}
+
+// 批量删除订单
+const batchDeleteOrders = async () => {
+  if (selectedOrders.value.length === 0) {
+    ElMessage.warning('请选择要删除的配货单')
+    return
+  }
+  
+  try {
+    await ElMessageBox.confirm(
+      `确定删除选中的 ${selectedOrders.value.length} 条配货单？`,
+      '批量删除确认',
+      { type: 'warning' }
+    )
+    
+    // 批量删除
+    for (const order of selectedOrders.value) {
+      await distributionApi.deleteOrder(order.id)
+    }
+    
+    ElMessage.success(`成功删除 ${selectedOrders.value.length} 条配货单`)
+    selectedOrders.value = []
+    loadOrders()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error('批量删除失败：' + (error.response?.data?.message || error.message))
     }
   }
 }

@@ -80,6 +80,9 @@
             <el-button link type="primary" @click.stop="showDetail(row)">
               查看详情
             </el-button>
+            <el-button link type="danger" @click.stop="deleteHistory(row)">
+              删除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -199,6 +202,26 @@ const showDetail = (row: any) => {
 // 历史选择变化
 const handleHistorySelectionChange = (selection: any[]) => {
   selectedHistory.value = selection
+}
+
+// 单条删除历史
+const deleteHistory = async (row: any) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除这条识别记录？`,
+      '删除确认',
+      { type: 'warning' }
+    )
+    
+    await distributionApi.api.delete(`/distribution/recognition-history/${row.id}`)
+    
+    ElMessage.success('删除成功')
+    loadHistory()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败：' + (error.response?.data?.message || error.message))
+    }
+  }
 }
 
 // 批量删除历史
