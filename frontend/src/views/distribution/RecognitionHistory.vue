@@ -209,8 +209,8 @@ const deleteHistory = async (row: any) => {
       { type: 'warning' }
     )
     
-    // TODO: 调用 API 删除
-    // await distributionApi.api.delete(`/distribution/recognition-history/${row.id}`)
+    // 调用 API 删除
+    await distributionApi.api.delete(`/distribution/recognition-history/${row.id}`)
     
     // 从列表中移除
     const index = historyList.value.findIndex(item => item.id === row.id)
@@ -221,8 +221,9 @@ const deleteHistory = async (row: any) => {
     
     ElMessage.success('删除成功')
   } catch (error: any) {
+    console.error('删除失败:', error)
     if (error !== 'cancel') {
-      ElMessage.error('删除失败')
+      ElMessage.error('删除失败：' + (error.response?.data?.message || error.message))
     }
   }
 }
