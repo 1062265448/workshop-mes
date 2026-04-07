@@ -26,8 +26,8 @@
       <div class="filter-toolbar">
         <div class="filter-left">
           <el-select
-            v-model="selectedDefectType"
-            placeholder="选择缺陷类型"
+            v-model="filterDefectType"
+            placeholder="缺陷类型"
             clearable
             style="width: 200px"
             @change="loadSamples"
@@ -37,21 +37,15 @@
               :key="type.id"
               :label="type.name"
               :value="type.id"
-            >
-              <span>{{ type.name }}</span>
-              <span style="color: #8492a6; font-size: 13px; margin-left: 8px">
-                ({{ type._count?.samples || 0 }} 样本)
-              </span>
-            </el-option>
+            />
           </el-select>
-
           <el-input
             v-model="searchKeyword"
             placeholder="搜索描述..."
             prefix-icon="Search"
             style="width: 250px"
             clearable
-            @input="handleSearch"
+            @input="loadSamples"
           />
         </div>
 
@@ -92,8 +86,7 @@
               :src="sample.imageUrl"
               fit="cover"
               class="sample-image"
-              :preview-src-list="[sample.imageUrl]"
-              preview-teleported
+              @click="openPreview(sample)"
             >
               <template #error>
                 <div class="image-error">
@@ -102,10 +95,35 @@
                 </div>
               </template>
             </el-image>
-
+            
+            <!-- 标注框覆盖层 -->
+            <div 
+              v-if="sample.annotations && sample.annotations.length > 0"
+              class="annotation-overlay"
+            >
+              <div 
+                v-for="(anno, index) in sample.annotations" 
+                :key="index"
+                class="annotation-box"
+                :style="{
+                  left: (normalizeCoordinate(Number(anno.x), 4000) * 100) + '%',
+                  top: (normalizeCoordinate(Number(anno.y), 3000) * 100) + '%',
+                  width: (normalizeCoordinate(Number(anno.width), 4000) * 100) + '%',
+                  height: (normalizeCoordinate(Number(anno.height), 3000) * 100) + '%',
+                  borderColor: getDefectTypeColor(anno.defectTypeId)
+                }"
+              >
+                <span class="annotation-label">{{ getDefectTypeName(anno.defectTypeId) }}</span>
+              </div>
+            </div>
+            
             <!-- 缺陷类型标签 -->
             <div class="sample-type-tag">
-              <el-tag :color="sample.defectType?.color || '#ff0000'" size="small" effect="dark">
+              <el-tag 
+                :color="getDefectTypeColor(sample.defectType)" 
+                size="small"
+                style="background: #fff;"
+              >
                 {{ sample.defectType?.name }}
               </el-tag>
             </div>
@@ -174,7 +192,11 @@
         </el-table-column>
         <el-table-column prop="defectType.name" label="缺陷类型" width="150">
           <template #default="{ row }">
-            <el-tag :color="row.defectType?.color || '#ff0000'" size="small" effect="dark">
+            <el-tag 
+              :color="getDefectTypeColor(row.defectType)" 
+              size="small"
+              style="background: #fff;"
+            >
               {{ row.defectType?.name }}
             </el-tag>
           </template>
@@ -228,12 +250,7 @@
     >
       <el-form :model="uploadForm" label-width="100px" :rules="uploadRules" ref="uploadFormRef">
         <el-form-item label="缺陷类型" prop="defectTypeId">
-          <el-select 
-            v-model="uploadForm.defectTypeId" 
-            placeholder="选择缺陷类型" 
-            style="width: 100%"
-            :multiple="false"
-          >
+          <el-select v-model="uploadForm.defectTypeId" placeholder="选择缺陷类型" style="width: 100%">
             <el-option
               v-for="type in defectTypes"
               :key="type.id"
@@ -248,13 +265,12 @@
             ref="uploadRef"
             class="image-uploader"
             :action="uploadUrl"
-            :headers="uploadHeaders"
             name="image"
-            :data="{ defectTypeId: uploadForm.defectTypeId, description: uploadForm.description }"
-            :on-success="handleUploadSuccess"
-            :on-error="handleUploadError"
-            :before-upload="beforeUpload"
+            :data="() => ({ defectTypeId: String(uploadForm.defectTypeId || '') })"
             :show-file-list="false"
+            :before-upload="beforeUpload"
+            :on-success="onUploadSuccess"
+            :on-error="onUploadError"
             drag
           >
             <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
@@ -263,19 +279,10 @@
             </div>
             <template #tip>
               <div class="el-upload__tip">
-                支持 jpg/png 格式，图片大小不超过 10MB
+                支持 jpg/png 格式
               </div>
             </template>
           </el-upload>
-        </el-form-item>
-
-        <el-form-item label="描述" prop="description">
-          <el-input
-            v-model="uploadForm.description"
-            type="textarea"
-            :rows="3"
-            placeholder="描述样本特征..."
-          />
         </el-form-item>
       </el-form>
 
@@ -285,6 +292,46 @@
           确定
         </el-button>
       </template>
+    </el-dialog>
+
+    <!-- 图片放大查看对话框 -->
+    <el-dialog
+      v-model="showPreviewDialog"
+      title="查看样本图片"
+      width="80%"
+      :close-on-click-modal="false"
+      class="image-preview-dialog"
+    >
+      <div class="preview-container" ref="previewContainer">
+        <div class="preview-image-wrapper">
+          <img 
+            :src="previewSample?.imageUrl" 
+            class="preview-image"
+            @load="onImageLoad"
+          />
+          
+          <!-- 标注框覆盖层 -->
+          <div 
+            v-if="previewSample?.annotations && previewSample.annotations.length > 0 && imageLoaded"
+            class="preview-annotation-overlay"
+          >
+            <div 
+              v-for="(anno, index) in previewSample.annotations" 
+              :key="index"
+              class="preview-annotation-box"
+              :style="{
+                left: (normalizeCoordinate(Number(anno.x), imageWidth) * 100) + '%',
+                top: (normalizeCoordinate(Number(anno.y), imageHeight) * 100) + '%',
+                width: (normalizeCoordinate(Number(anno.width), imageWidth) * 100) + '%',
+                height: (normalizeCoordinate(Number(anno.height), imageHeight) * 100) + '%',
+                borderColor: getDefectTypeColor(anno.defectTypeId)
+              }"
+            >
+              <span class="preview-annotation-label">{{ getDefectTypeName(anno.defectTypeId) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </el-dialog>
 
     <!-- 编辑对话框 -->
@@ -335,8 +382,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Picture,
@@ -352,10 +399,9 @@ import {
   EditPen,
   Delete,
 } from '@element-plus/icons-vue'
-import * as defects from '@/api/defects'
+import * as defectsApi from '@/api/defects'
 import { compressImage } from '@/utils/imageCompressor'
 
-const route = useRoute()
 const router = useRouter()
 
 // 状态
@@ -368,17 +414,20 @@ const currentPage = ref(1)
 const pageSize = ref(24)
 const total = ref(0)
 const viewMode = ref<'grid' | 'list'>('grid')
-const selectedDefectType = ref<number | null>(null)
+const filterDefectType = ref<number | null>(null)
 const searchKeyword = ref('')
 const showUploadDialog = ref(false)
 const showEditDialog = ref(false)
+const showPreviewDialog = ref(false)
 const editingSample = ref<any>(null)
+const previewSample = ref<any>(null)
+const imageLoaded = ref(false)
+const imageWidth = ref(4000)
+const imageHeight = ref(3000)
 
 // 上传表单
 const uploadForm = reactive({
   defectTypeId: null as number | null,
-  description: '',
-  image: null as File | null,
 })
 
 // 编辑表单
@@ -388,26 +437,20 @@ const editForm = reactive({
   status: 'pending',
 })
 
-// API 基础 URL
+// 上传配置
 const API_BASE = 'http://localhost:3001'
-const uploadUrl = computed(() => `${API_BASE}/defects/samples/upload`)
-const uploadHeaders = computed(() => ({}))
+const uploadUrl = `${API_BASE}/defects/samples/upload`
 
 // 上传验证规则
 const uploadRules = {
   defectTypeId: [{ required: true, message: '请选择缺陷类型', trigger: 'change' }],
 }
 
-// 加载缺陷类型列表
+// 加载缺陷类型
 const loadDefectTypes = async () => {
   try {
-    const res: any = await defects.getDefectTypes()
+    const res: any = await defectsApi.getDefectTypes()
     defectTypes.value = res || []
-
-    // 如果 URL 中有 defectTypeId 参数，自动选中
-    if (route.query.defectTypeId) {
-      selectedDefectType.value = Number(route.query.defectTypeId)
-    }
   } catch (error: any) {
     console.error('加载缺陷类型失败:', error)
   }
@@ -417,15 +460,19 @@ const loadDefectTypes = async () => {
 const loadSamples = async () => {
   loading.value = true
   try {
-    // 直接使用 defectsApi 中的函数
-    const res: any = await defects.getDefectSamples({})
+    const params: any = {
+      page: currentPage.value,
+      limit: pageSize.value,
+    }
+    if (filterDefectType.value) {
+      params.defectTypeId = filterDefectType.value
+    }
+
+    const res: any = await defectsApi.getDefectSamples(params)
     samples.value = res.data || []
     total.value = res.total || 0
-    console.log('✅ 样本加载成功:', samples.value.length, '条')
   } catch (error: any) {
-    console.error('❌ 加载样本失败:', error)
-    console.error('错误响应:', error.response?.data)
-    ElMessage.error('加载样本失败：' + (error.response?.data?.message || error.message))
+    console.error('加载样本失败:', error)
   } finally {
     loading.value = false
   }
@@ -436,15 +483,41 @@ const refreshData = () => {
   ElMessage.success('刷新成功')
 }
 
-const handleSearch = () => {
-  currentPage.value = 1
-  loadSamples()
+// 上传前验证
+const beforeUpload = (file: File) => {
+  const isImage = file.type.startsWith('image/')
+
+  if (!isImage) {
+    ElMessage.error('只能上传图片文件！')
+    return false
+  }
+
+  if (!uploadForm.defectTypeId) {
+    ElMessage.warning('请先选择缺陷类型')
+    return false
+  }
+
+  ElMessage.info(`正在上传：${(file.size / 1024 / 1024).toFixed(2)}MB`)
+  return true
 }
 
-// 上传相关
-const uploadRef = ref()
-const uploadFormRef = ref()
+// 上传成功
+const onUploadSuccess = (response: any) => {
+  if (response.success) {
+    ElMessage.success('图片上传成功')
+    showUploadDialog.value = false
+    loadSamples()
+  } else {
+    ElMessage.error('上传失败：' + (response.message || '未知错误'))
+  }
+}
 
+// 上传失败
+const onUploadError = () => {
+  ElMessage.error('上传失败，请重试')
+}
+
+// 打开上传对话框
 const handleUpload = () => {
   if (defectTypes.value.length === 0) {
     ElMessage.warning('请先创建缺陷类型')
@@ -454,35 +527,7 @@ const handleUpload = () => {
   showUploadDialog.value = true
 }
 
-const beforeUpload = (file: File) => {
-  const isImage = file.type.startsWith('image/')
-  const isLt10M = file.size / 1024 / 1024 < 10
-
-  if (!isImage) {
-    ElMessage.error('只能上传图片文件！')
-  }
-  if (!isLt10M) {
-    ElMessage.error('图片大小不能超过 10MB！')
-  }
-
-  return isImage && isLt10M
-}
-
-const handleUploadSuccess = (response: any, uploadFile: any) => {
-  if (response.success) {
-    ElMessage.success('上传成功')
-    showUploadDialog.value = false
-    resetUploadForm()
-    loadSamples()
-  } else {
-    ElMessage.error('上传失败：' + (response.message || '未知错误'))
-  }
-}
-
-const handleUploadError = () => {
-  ElMessage.error('上传失败，请重试')
-}
-
+// 提交上传
 const submitUpload = async () => {
   if (!uploadFormRef.value) return
 
@@ -492,26 +537,17 @@ const submitUpload = async () => {
     return
   }
 
-  if (!uploadForm.defectTypeId || !uploadForm.image) {
-    ElMessage.error('请选择图片和缺陷类型')
-    return
-  }
-
   uploading.value = true
 
   try {
-    // 确保 defectTypeId 是数字
-    const dtId = Array.isArray(uploadForm.defectTypeId) 
-      ? uploadForm.defectTypeId[0] 
-      : uploadForm.defectTypeId
+    const dtId = uploadForm.defectTypeId
 
-    // 压缩图片
     ElMessage.info('正在压缩图片...')
     const { blob } = await compressImage(uploadForm.image, {
       maxWidth: 1920,
       maxHeight: 1920,
       quality: 0.8,
-      maxWidthKB: 500, // 最大 500KB
+      maxWidthKB: 500,
     })
 
     const compressedFile = new File([blob], uploadForm.image.name, {
@@ -521,31 +557,20 @@ const submitUpload = async () => {
 
     console.log(`📦 图片压缩：${(uploadForm.image.size / 1024).toFixed(2)}KB → ${(blob.size / 1024).toFixed(2)}KB`)
 
-    // 上传压缩后的图片
-    await defects.uploadDefectImage(compressedFile, dtId, uploadForm.description)
+    await defectsApi.uploadDefectImage(compressedFile, dtId, uploadForm.description)
     
     ElMessage.success('上传成功')
     showUploadDialog.value = false
-    resetUploadForm()
     loadSamples()
   } catch (error: any) {
     console.error('上传失败:', error)
-    ElMessage.error('上传失败：' + (error.response?.data?.message || error.message || error.message))
+    ElMessage.error('上传失败：' + (error.response?.data?.message || error.message))
   } finally {
     uploading.value = false
   }
 }
 
-const resetUploadForm = () => {
-  uploadForm.defectTypeId = null
-  uploadForm.description = ''
-  uploadForm.image = null
-  if (uploadFormRef.value) {
-    uploadFormRef.value.clearValidate()
-  }
-}
-
-// 编辑相关
+// 编辑样本
 const handleEdit = (sample: any) => {
   editingSample.value = sample
   editForm.defectTypeId = sample.defectTypeId
@@ -554,6 +579,7 @@ const handleEdit = (sample: any) => {
   showEditDialog.value = true
 }
 
+// 提交编辑
 const submitEdit = async () => {
   if (!editingSample.value) return
 
@@ -570,7 +596,7 @@ const submitEdit = async () => {
   }
 }
 
-// 删除
+// 删除样本
 const handleDelete = async (sample: any) => {
   try {
     await ElMessageBox.confirm(
@@ -587,6 +613,21 @@ const handleDelete = async (sample: any) => {
       ElMessage.error('删除失败：' + (error.response?.data?.message || error.message))
     }
   }
+}
+
+// 打开图片预览
+const openPreview = (sample: any) => {
+  previewSample.value = sample
+  imageLoaded.value = false
+  showPreviewDialog.value = true
+}
+
+// 图片加载完成
+const onImageLoad = (e: Event) => {
+  const img = e.target as HTMLImageElement
+  imageWidth.value = img.naturalWidth || 4000
+  imageHeight.value = img.naturalHeight || 3000
+  imageLoaded.value = true
 }
 
 // 标注
@@ -607,6 +648,35 @@ const getStatusText = (status: string) => {
   return map[status] || status
 }
 
+// 获取缺陷类型颜色（与标注工具保持一致）
+const getDefectTypeColor = (defectType: any) => {
+  if (!defectType) return '#ff0000'
+  
+  // 统一的颜色配置（蓝色/橙色/粉色）
+  const colorMap: any = {
+    '不锈钢专用镍 (3#)': '#3b82f6',        // 蓝色
+    '不锈钢专用镍 (绿色结晶)': '#f97316',  // 橙色
+    '不锈钢专用镍 (氢氧化镍)': '#ec4899',  // 粉色
+  }
+  
+  return colorMap[defectType.name] || defectType.color || '#ff0000'
+}
+
+// 将像素值转换为百分比（假设图片最大尺寸为 4000x3000）
+const normalizeCoordinate = (value: number, max: number = 4000) => {
+  // 如果值 <= 1，说明已经是百分比，直接返回
+  if (value <= 1) return value
+  // 否则转换为百分比
+  return value / max
+}
+
+// 获取缺陷类型名称
+const getDefectTypeName = (defectTypeId: number) => {
+  if (!defectTypeId) return ''
+  const type = defectTypes.value.find(t => t.id === defectTypeId)
+  return type ? type.name : ''
+}
+
 onMounted(() => {
   loadDefectTypes()
   loadSamples()
@@ -620,7 +690,6 @@ onMounted(() => {
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
 }
 
-/* 页面头部 */
 .page-header {
   display: flex;
   justify-content: space-between;
@@ -649,17 +718,11 @@ onMounted(() => {
 }
 
 .page-desc {
-  margin: 8px 0 0 48px;
-  font-size: 14px;
+  margin: 0;
+  font-size: 13px;
   color: #64748b;
 }
 
-.header-actions {
-  display: flex;
-  gap: 12px;
-}
-
-/* 筛选卡片 */
 .filter-card {
   margin-bottom: 24px;
   border-radius: 12px;
@@ -677,21 +740,21 @@ onMounted(() => {
   align-items: center;
 }
 
-/* 样本网格 */
 .samples-grid {
   margin-bottom: 24px;
 }
 
-/* 样本卡片 */
 .sample-card {
   margin-bottom: 20px;
   border-radius: 12px;
+  cursor: pointer;
   transition: all 0.3s ease;
+  border: 2px solid transparent;
 }
 
 .sample-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
 .sample-image-wrapper {
@@ -706,6 +769,7 @@ onMounted(() => {
 .sample-image {
   width: 100%;
   height: 100%;
+  object-fit: cover;
 }
 
 .image-error {
@@ -718,15 +782,52 @@ onMounted(() => {
   gap: 8px;
 }
 
-.sample-type-tag {
+/* 标注框覆盖层 */
+.annotation-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.annotation-box {
+  position: absolute;
+  border: 2px solid;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.annotation-label {
+  position: absolute;
+  top: -24px;
+  left: 0;
+  background: #fff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  white-space: nowrap;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.sample-type-tag, .sample-status-tag {
   position: absolute;
   top: 12px;
+}
+
+.sample-type-tag {
   left: 12px;
 }
 
 .sample-status-tag {
-  position: absolute;
-  top: 12px;
   right: 12px;
 }
 
@@ -739,11 +840,7 @@ onMounted(() => {
   justify-content: space-between;
   font-size: 12px;
   color: #94a3b8;
-  margin-bottom: 8px;
-}
-
-.sample-id {
-  font-family: monospace;
+  margin-bottom: 4px;
 }
 
 .sample-description {
@@ -769,10 +866,8 @@ onMounted(() => {
   gap: 8px;
   padding-top: 12px;
   border-top: 1px solid #e2e8f0;
-  margin-top: 12px;
 }
 
-/* 列表视图 */
 .samples-list-card {
   margin-bottom: 24px;
   border-radius: 12px;
@@ -781,18 +876,16 @@ onMounted(() => {
 .thumbnail {
   width: 80px;
   height: 60px;
-  border-radius: 4px;
   object-fit: cover;
+  border-radius: 4px;
 }
 
-/* 分页 */
 .pagination {
   display: flex;
   justify-content: flex-end;
   margin-top: 24px;
 }
 
-/* 上传对话框 */
 .image-uploader {
   width: 100%;
 }
@@ -802,25 +895,69 @@ onMounted(() => {
   border-radius: 12px;
 }
 
-/* 响应式 */
-@media (max-width: 768px) {
-  .page-header {
-    flex-direction: column;
-    gap: 16px;
+/* 图片预览对话框 */
+.image-preview-dialog {
+  .el-dialog__body {
+    padding: 20px;
+    background: #f5f7fa;
+    height: auto;
+    max-height: 80vh;
+    overflow: auto;
   }
+}
 
-  .page-desc {
-    margin: 8px 0 0 0;
-  }
+.preview-container {
+  position: relative;
+  width: 100%;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
 
-  .filter-toolbar {
-    flex-direction: column;
-    gap: 12px;
-  }
+.preview-image-wrapper {
+  position: relative;
+  display: inline-block;
+}
 
-  .filter-left, .filter-right {
-    width: 100%;
-    justify-content: flex-start;
-  }
+.preview-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  max-height: 70vh;
+}
+
+.preview-annotation-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.preview-annotation-box {
+  position: absolute;
+  border: 2px solid;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+  background: rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+}
+
+.preview-annotation-label {
+  position: absolute;
+  top: -24px;
+  left: 0;
+  background: #fff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  white-space: nowrap;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 </style>

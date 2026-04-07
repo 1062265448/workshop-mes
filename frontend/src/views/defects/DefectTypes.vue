@@ -10,6 +10,14 @@
         <p class="page-desc">管理缺陷分类、查看样本数量</p>
       </div>
       <div class="header-actions">
+        <el-button type="success" @click="$router.push('/defects/annotate')">
+          <el-icon><EditPen /></el-icon>
+          缺陷标注
+        </el-button>
+        <el-button type="primary" @click="$router.push('/defects/samples')">
+          <el-icon><Picture /></el-icon>
+          样本库
+        </el-button>
         <el-button type="primary" @click="showCreateDialog = true">
           <el-icon><Plus /></el-icon>
           新增缺陷类型
@@ -35,8 +43,12 @@
           <template #header>
             <div class="card-header">
               <div class="type-info">
-                <span class="type-code">{{ type.code }}</span>
-                <el-tag :color="type.color || '#ff0000'" effect="dark" size="small">
+                <div class="type-code-row">{{ type.code }}</div>
+                <el-tag 
+                  :color="getTypeColor(type)" 
+                  size="small"
+                  style="background: #fff;"
+                >
                   {{ type.name }}
                 </el-tag>
               </div>
@@ -51,26 +63,24 @@
             </div>
           </template>
 
-          <!-- 缩略图 -->
-          <div class="card-thumbnail" @click="handleViewSamples(type)">
-            <el-image
-              v-if="type.thumbnailUrl"
-              :src="type.thumbnailUrl"
-              fit="cover"
-              class="thumbnail-image"
-              :preview-src-list="[type.thumbnailUrl]"
-              preview-teleported
+          <!-- 样本缩略图 -->
+          <div class="sample-thumbnails" @click="handleViewSamples(type)">
+            <div 
+              v-for="(sample, index) in type.samples" 
+              :key="sample.id"
+              class="sample-thumbnail-item"
+              :style="{
+                backgroundImage: `url(${sample.imageUrl})`
+              }"
             >
-              <template #error>
-                <div class="image-error">
-                  <el-icon :size="48"><Picture /></el-icon>
-                  <span>无缩略图</span>
-                </div>
-              </template>
-            </el-image>
-            <div v-else class="no-thumbnail">
+            </div>
+            <div v-if="type.samples && type.samples.length > 0" class="sample-count">
+              <el-icon><Picture /></el-icon>
+              <span>{{ type._count?.samples || 0 }} 个样本</span>
+            </div>
+            <div v-else class="no-samples">
               <el-icon :size="48"><PictureFilled /></el-icon>
-              <span>点击上传缩略图</span>
+              <span>暂无样本</span>
             </div>
           </div>
 
@@ -105,6 +115,10 @@
             <el-button type="success" plain size="small" @click="handleAddSample(type)">
               <el-icon><Plus /></el-icon>
               添加样本
+            </el-button>
+            <el-button type="warning" plain size="small" @click="handleAnnotate(type)">
+              <el-icon><EditPen /></el-icon>
+              标注
             </el-button>
           </div>
         </el-card>
@@ -193,15 +207,23 @@ import {
   Picture,
   PictureFilled,
   FolderOpened,
+  EditPen,
 } from '@element-plus/icons-vue'
 import * as defectsApi from '@/api/defects'
+
+// 全局错误捕获
+if (typeof defectsApi === 'undefined') {
+  console.error('❌ defectsApi 未定义！')
+} else {
+  console.log('✅ defectsApi 已加载:', Object.keys(defectsApi))
+}
 
 const router = useRouter()
 
 // 状态
 const loading = ref(false)
 const submitting = ref(false)
-const defectTypes = ref([])
+const defectTypes = ref<any[]>([])
 const showCreateDialog = ref(false)
 const showSampleDialog = ref(false)
 const editingId = ref<number | null>(null)
@@ -220,6 +242,18 @@ const form = reactive({
 // 验证规则
 const rules = {
   name: [{ required: true, message: '请输入缺陷名称', trigger: 'blur' }],
+}
+
+// 获取类型颜色（与标注工具保持一致）
+const getTypeColor = (type: any) => {
+  // 统一的颜色配置（蓝色/橙色/粉色）
+  const colorMap: any = {
+    '不锈钢专用镍 (3#)': '#3b82f6',        // 蓝色
+    '不锈钢专用镍 (绿色结晶)': '#f97316',  // 橙色
+    '不锈钢专用镍 (氢氧化镍)': '#ec4899',  // 粉色
+  }
+  
+  return colorMap[type.name] || type.color || '#ff0000'
 }
 
 // 加载缺陷类型列表
@@ -250,11 +284,9 @@ const submitForm = async () => {
     submitting.value = true
 
     if (editingId.value) {
-      // 更新
       await defectsApi.updateDefectType(editingId.value, form)
       ElMessage.success('缺陷类型已更新')
     } else {
-      // 新增
       await defectsApi.createDefectType(form)
       ElMessage.success('缺陷类型已创建')
     }
@@ -284,12 +316,20 @@ const handleEdit = (type: any) => {
 
 // 删除
 const handleDelete = async (type: any) => {
+  console.log('🔍 defectsApi:', defectsApi)
+  console.log('🔍 deleteDefectType:', typeof defectsApi?.deleteDefectType)
+  
   try {
     await ElMessageBox.confirm(
       `确定删除缺陷类型 "${type.name}"？删除后将无法恢复。`,
       '删除确认',
       { type: 'warning' }
     )
+
+    if (!defectsApi || !defectsApi.deleteDefectType) {
+      ElMessage.error('API 未定义，请刷新页面')
+      return
+    }
 
     await defectsApi.deleteDefectType(type.id)
     ElMessage.success('删除成功')
@@ -323,6 +363,14 @@ const handleAddSample = (type: any) => {
   })
 }
 
+// 标注
+const handleAnnotate = (type: any) => {
+  router.push({
+    path: '/defects/annotate',
+    query: { defectTypeId: type.id }
+  })
+}
+
 // 重置表单
 const resetForm = () => {
   editingId.value = null
@@ -348,7 +396,6 @@ onMounted(() => {
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
 }
 
-/* 页面头部 */
 .page-header {
   display: flex;
   justify-content: space-between;
@@ -383,12 +430,10 @@ onMounted(() => {
   gap: 12px;
 }
 
-/* 缺陷类型网格 */
 .defect-types-grid {
   margin-bottom: 24px;
 }
 
-/* 缺陷类型卡片 */
 .defect-type-card {
   margin-bottom: 20px;
   border-radius: 12px;
@@ -408,13 +453,12 @@ onMounted(() => {
 
 .type-info {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.type-code {
-  font-size: 12px;
+.type-code-row {
+  font-size: 11px;
   color: #94a3b8;
   font-family: monospace;
 }
@@ -424,39 +468,56 @@ onMounted(() => {
   gap: 4px;
 }
 
-/* 缩略图区域 */
-.card-thumbnail {
+.sample-thumbnails {
   height: 200px;
   background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 2px;
+  padding: 2px;
   margin-bottom: 16px;
   transition: all 0.3s ease;
+  position: relative;
 }
 
-.card-thumbnail:hover {
+.sample-thumbnails:hover {
   background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.thumbnail-image {
-  width: 100%;
-  height: 100%;
+.sample-thumbnail-item {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 4px;
+  transition: transform 0.3s ease;
 }
 
-.image-error {
+.sample-thumbnail-item:hover {
+  transform: scale(1.05);
+}
+
+.sample-count {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  color: #94a3b8;
-  gap: 8px;
+  gap: 4px;
 }
 
-.no-thumbnail {
+.no-samples {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -466,7 +527,6 @@ onMounted(() => {
   font-size: 14px;
 }
 
-/* 统计信息 */
 .card-stats {
   display: flex;
   gap: 16px;
@@ -481,12 +541,10 @@ onMounted(() => {
   gap: 4px;
 }
 
-/* 分类 */
 .card-category {
   margin-bottom: 8px;
 }
 
-/* 描述 */
 .card-description {
   font-size: 13px;
   color: #64748b;
@@ -498,7 +556,6 @@ onMounted(() => {
   overflow: hidden;
 }
 
-/* 底部按钮 */
 .card-footer {
   display: flex;
   gap: 8px;
@@ -506,14 +563,12 @@ onMounted(() => {
   border-top: 1px solid #e2e8f0;
 }
 
-/* 表单提示 */
 .form-tip {
   font-size: 12px;
   color: #94a3b8;
   margin-top: 4px;
 }
 
-/* 响应式 */
 @media (max-width: 768px) {
   .page-header {
     flex-direction: column;

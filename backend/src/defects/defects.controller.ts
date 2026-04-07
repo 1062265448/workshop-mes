@@ -142,7 +142,7 @@ export class DefectsController {
         },
       }),
       limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB
+        fileSize: 50 * 1024 * 1024, // 50MB
       },
       fileFilter: (req, file, cb) => {
         if (file.mimetype.startsWith('image/')) {
@@ -155,11 +155,21 @@ export class DefectsController {
   )
   async uploadDefectImage(
     @UploadedFile() file: any,
-    @Body('defectTypeId', new ParseIntPipe()) defectTypeId: number,
+    @Body('defectTypeId') defectTypeIdStr?: string,
     @Body('description') description?: string,
   ) {
     try {
       this.logger.log(`📷 上传缺陷图片：${file.originalname}`);
+      this.logger.log(`缺陷类型 ID 字符串：${defectTypeIdStr}`);
+
+      const defectTypeId = defectTypeIdStr ? parseInt(defectTypeIdStr) : null;
+      
+      if (!defectTypeId) {
+        this.logger.warn('缺少缺陷类型 ID');
+        throw new Error('请先选择缺陷类型');
+      }
+      
+      this.logger.log(`缺陷类型 ID: ${defectTypeId}`);
 
       const imageUrl = `/uploads/defects/${file.filename}`;
 

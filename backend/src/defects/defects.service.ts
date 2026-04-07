@@ -16,6 +16,15 @@ export class DefectsService {
       include: {
         _count: {
           select: { samples: true, annotations: true }
+        },
+        samples: {
+          take: 6,  // 返回前 6 个样本的缩略图
+          select: {
+            id: true,
+            imageUrl: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' }
         }
       }
     });
@@ -100,18 +109,41 @@ export class DefectsService {
 
       this.logger.log(`📊 查询样本：defectTypeId=${defectTypeId}, page=${page}, limit=${limit}`);
 
-      // 暂时移除 include，测试是否是关联查询的问题
+      // 包含标注数量和缺陷类型信息
       const [data, total] = await Promise.all([
         this.prisma.defectSample.findMany({
           where,
           skip,
           take: limit,
           orderBy: { createdAt: 'desc' },
+          include: {
+            defectType: true,
+            annotations: {
+              select: {
+                id: true,
+                x: true,
+                y: true,
+                width: true,
+                height: true,
+                defectTypeId: true,
+              },
+            },
+          },
         }),
         this.prisma.defectSample.count({ where }),
       ]);
 
       this.logger.log(`✅ 查询成功：${data.length} 条样本，共 ${total} 条`);
+      
+      // 调试日志：检查标注数据
+      data.forEach((sample, index) => {
+        if (sample.annotations && sample.annotations.length > 0) {
+          this.logger.log(`📌 样本 ${sample.id} 有 ${sample.annotations.length} 个标注`);
+          sample.annotations.forEach((anno, annoIndex) => {
+            this.logger.log(`  标注 ${annoIndex + 1}: x=${anno.x}, y=${anno.y}, w=${anno.width}, h=${anno.height}`);
+          });
+        }
+      });
 
       return { data, total, page, limit };
     } catch (error: any) {
@@ -185,17 +217,25 @@ export class DefectsService {
   }
 
   async deleteDefectSample(id: number) {
-    const sample = await this.prisma.defectSample.findUnique({
-      where: { id },
-    });
-
-    if (!sample) {
-      throw new NotFoundException(`样本 ID ${id} 不存在`);
+    this.logger.log(`🗑️ 删除样本 ID: ${id}`);
+    
+    try {
+      // 先删除关联的标注
+      await this.prisma.defectAnnotation.deleteMany({
+        where: { sampleId: id },
+      });
+      
+      // 再删除样本
+      const sample = await this.prisma.defectSample.delete({
+        where: { id },
+      });
+      
+      this.logger.log(`✅ 样本删除成功`);
+      return sample;
+    } catch (error: any) {
+      this.logger.error(`❌ 删除样本失败:`, error.message);
+      throw error;
     }
-
-    return this.prisma.defectSample.delete({
-      where: { id },
-    });
   }
 
   // ==================== 缺陷标注管理 ====================
