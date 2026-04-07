@@ -110,12 +110,12 @@
             </el-table-column>
             <el-table-column label="重量 (kg)" width="100" align="right">
               <template #default="{ row }">
-                {{ (row.weight || 0).toFixed(2) }}
+                {{ (parseFloat(row.weight) || 0).toFixed(2) }}
               </template>
             </el-table-column>
             <el-table-column label="片数" width="80" align="right">
               <template #default="{ row }">
-                {{ row.pieceCount || 0 }}
+                {{ parseInt(row.pieceCount) || 0 }}
               </template>
             </el-table-column>
             <el-table-column label="批号" width="140">
@@ -1032,39 +1032,19 @@ const batchImportAll = async () => {
     batchImporting.value = true
     try {
       // 转换为批量导入数据
-      const importData = selectedRecords.value.map((record, index) => ({
+      const importData = selectedRecords.value.map((record) => ({
         batchNo: record.batchNo || `B${record.packageNo}`,
         grade: record.grade || 'Ni9996',
         specification: record.grade || '99.96%',
         weight: record.netWeight || 0,
         pieceCount: record.pieceCount || 0,
         location: '',
-        nickelContent: parseFloat(record.grade?.replace('Ni', '') || '99.96'),
+        concentration: parseFloat(record.grade?.replace('Ni', '') || '99.96') / 100,
         inspectionDate: record.date || new Date().toISOString().split('T')[0],
       }))
       
-      // TODO: 调用 API 批量创建
-      // await api.post('/distribution/inventory/batch', importData)
-      
-      // 模拟添加到列表（实际应该调用 API）
-      // 使用唯一 ID：时间戳 + 索引，避免冲突
-      const baseId = Date.now()
-      importData.forEach((item, idx) => {
-        inventoryList.value.push({
-          id: `${baseId}-${idx}`,  // 唯一 ID
-          tankNo: item.batchNo,
-          batchNo: item.batchNo,
-          grade: item.grade,
-          specification: item.specification,
-          weight: item.weight,
-          pieceCount: item.pieceCount,
-          location: item.location,
-          nickelContent: item.nickelContent,
-          concentration: item.nickelContent,
-          status: 'available',
-          createdAt: new Date().toISOString(),
-        })
-      })
+      // 调用真实 API 批量创建
+      await distributionApi.batchCreateInventory(importData)
       
       ElMessage.success(`成功导入 ${importData.length} 条记录`)
       aiRecognizedData.value = []
@@ -1074,11 +1054,11 @@ const batchImportAll = async () => {
       editingInventoryId.value = null
       resetInventoryForm()
       
-      // 刷新统计
-      stats.totalInventory = inventoryList.value.length
-      stats.availableInventory = inventoryList.value.filter((i: any) => i.status === 'available').length
-    } catch (error) {
-      ElMessage.error('批量导入失败')
+      // 重新加载库存列表
+      await loadInventory()
+    } catch (error: any) {
+      console.error('批量导入失败:', error)
+      ElMessage.error('批量导入失败：' + (error.response?.data?.message || error.message))
     } finally {
       batchImporting.value = false
     }
@@ -1095,18 +1075,21 @@ const quickAddRecord = async (index: number) => {
       specification: record.grade || '99.96%',
       weight: record.netWeight || 0,
       pieceCount: record.pieceCount || 0,
+      concentration: parseFloat(record.grade?.replace('Ni', '') || '99.96') / 100,
       inspectionDate: record.date || new Date().toISOString().split('T')[0],
     }
     
-    // 调用 API 创建
-    await distributionApi.createInventory(inventoryData)
+    // 调用真实 API 创建
+    const result = await distributionApi.createInventory(inventoryData)
+    console.log('单条导入成功:', result)
     
     // 从识别列表中移除
     aiRecognizedData.value.splice(index, 1)
     
     ElMessage.success('导入成功')
-    loadInventory()
+    await loadInventory()
   } catch (error: any) {
+    console.error('单条导入失败:', error)
     ElMessage.error('导入失败：' + (error.response?.data?.message || error.message))
   }
 }

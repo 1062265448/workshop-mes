@@ -189,28 +189,56 @@ model ProjectDocument {
 // ==================== 缺陷检测 ====================
 model DefectType {
   id          Int      @id @default(autoincrement())
-  code        String   @unique
-  name        String
-  description String?  @db.Text
-  category    String?
+  code        String   @unique          // 缺陷代码 (如：HOLE-001)
+  name        String                     // 缺陷名称 (如：缺角)
+  description String?  @db.Text         // 描述
+  category    String?                    // 分类 (如：形状缺陷、表面缺陷)
+  color       String?  @default("#ff0000") // 标注框默认颜色
+  thumbnailUrl String?                   // 缩略图路径
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  samples DefectSample[]
+  samples     DefectSample[]
+  annotations DefectAnnotation[]
 }
 
 model DefectSample {
   id          Int      @id @default(autoincrement())
-  defectTypeId Int
-  imageUrl    String
-  description String?  @db.Text
+  defectTypeId Int                       // 关联缺陷类型
+  imageUrl    String                     // 原图路径
+  thumbnailUrl String?                   // 缩略图路径
+  sourcePath  String?  @db.Text         // 样本库原始路径
+  description String?  @db.Text         // 描述
   status      String   @default("pending") // pending, reviewed, rejected
-  reviewedBy  Int?
-  reviewedAt  DateTime?
+  reviewedBy  Int?                       // 审核人 ID
+  reviewedAt  DateTime?                  // 审核时间
+  width       Int?                       // 图片宽度
+  height      Int?                       // 图片高度
+  fileSize    Int?                       // 文件大小 (字节)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  defectType DefectType @relation(fields: [defectTypeId], references: [id])
+  defectType  DefectType @relation(fields: [defectTypeId], references: [id])
+  annotations DefectAnnotation[]
+}
+
+// 缺陷标注 (标注框信息)
+model DefectAnnotation {
+  id           Int      @id @default(autoincrement())
+  sampleId     Int                       // 关联样本
+  defectTypeId Int                       // 关联缺陷类型
+  x            Decimal  @db.Decimal(8, 4) // 标注框 X 坐标 (0-1 之间的小数)
+  y            Decimal  @db.Decimal(8, 4) // 标注框 Y 坐标 (0-1 之间的小数)
+  width        Decimal  @db.Decimal(8, 4) // 标注框宽度 (0-1 之间的小数)
+  height       Decimal  @db.Decimal(8, 4) // 标注框高度 (0-1 之间的小数)
+  confidence   Decimal? @db.Decimal(5, 4) // 置信度 (0-1)
+  description  String?  @db.Text         // 标注说明
+  annotatedBy  Int?                       // 标注人 ID
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sample     DefectSample @relation(fields: [sampleId], references: [id])
+  defectType DefectType   @relation(fields: [defectTypeId], references: [id])
 }
 
 // ==================== AI 识别历史 ====================

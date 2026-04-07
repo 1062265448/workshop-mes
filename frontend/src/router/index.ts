@@ -45,8 +45,28 @@ const routes = [
       {
         path: 'defects',
         name: 'Defects',
-        component: () => import('@/views/Placeholder.vue'),
+        redirect: '/defects/types',
         meta: { title: '缺陷检测' },
+        children: [
+          {
+            path: 'types',
+            name: 'DefectTypes',
+            component: () => import('@/views/defects/DefectTypes.vue'),
+            meta: { title: '缺陷类型' },
+          },
+          {
+            path: 'samples',
+            name: 'DefectSamples',
+            component: () => import('@/views/defects/DefectSamples.vue'),
+            meta: { title: '缺陷样本' },
+          },
+          {
+            path: 'annotate',
+            name: 'DefectAnnotate',
+            component: () => import('@/views/defects/DefectAnnotate.vue'),
+            meta: { title: '缺陷标注' },
+          },
+        ],
       },
       {
         path: 'distribution',
