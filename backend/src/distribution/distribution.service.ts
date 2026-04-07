@@ -36,14 +36,26 @@ export class DistributionService {
     // 生成唯一的 tankNo
     const tankNo = dto.tankNo || dto.batchNo || `TANK-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     
-    // 字段映射：DTO → Prisma 模型
+    // 字段映射：DTO → Prisma 模型 (支持新旧字段)
+    const createData: any = {
+      tankNo,
+      batchNo: dto.batchNo || tankNo,
+      grade: dto.grade || dto.specification || undefined,
+      specification: dto.specification || undefined,
+      concentration: dto.concentration || parseFloat(dto.grade?.replace('Ni', '') || '99.96') / 100 || 99.96,
+      temperature: dto.temperature || 25,
+      ph: dto.ph || 7,
+      weight: dto.weight !== undefined ? parseFloat(dto.weight) : undefined,
+      pieceCount: dto.pieceCount !== undefined ? parseInt(dto.pieceCount) : undefined,
+      inspectionDate: dto.inspectionDate ? new Date(dto.inspectionDate) : undefined,
+      status: dto.status || 'available',
+      location: dto.location || undefined,
+    };
+    
+    this.logger.log('📦 创建库存数据:', createData);
+    
     return this.prisma.nickelInventory.create({
-      data: {
-        tankNo,
-        concentration: dto.concentration || 99.96,
-        temperature: dto.temperature || 25,
-        ph: dto.ph || 7,
-      },
+      data: createData,
     });
   }
 
@@ -63,21 +75,21 @@ export class DistributionService {
 
   async updateInventory(id: number, dto: any) {
     try {
-      // 字段映射：前端 → Prisma 模型
+      // 字段映射：前端 → Prisma 模型 (支持新旧字段)
       const updateData: any = {}
       
-      if (dto.tankNo !== undefined) {
-        updateData.tankNo = dto.tankNo
-      }
-      if (dto.concentration !== undefined) {
-        updateData.concentration = parseFloat(dto.concentration)
-      }
-      if (dto.temperature !== undefined) {
-        updateData.temperature = parseFloat(dto.temperature)
-      }
-      if (dto.ph !== undefined) {
-        updateData.ph = parseFloat(dto.ph)
-      }
+      if (dto.tankNo !== undefined) updateData.tankNo = dto.tankNo
+      if (dto.batchNo !== undefined) updateData.batchNo = dto.batchNo
+      if (dto.grade !== undefined) updateData.grade = dto.grade
+      if (dto.specification !== undefined) updateData.specification = dto.specification
+      if (dto.concentration !== undefined) updateData.concentration = parseFloat(dto.concentration)
+      if (dto.temperature !== undefined) updateData.temperature = parseFloat(dto.temperature)
+      if (dto.ph !== undefined) updateData.ph = parseFloat(dto.ph)
+      if (dto.weight !== undefined) updateData.weight = parseFloat(dto.weight)
+      if (dto.pieceCount !== undefined) updateData.pieceCount = parseInt(dto.pieceCount)
+      if (dto.inspectionDate !== undefined) updateData.inspectionDate = new Date(dto.inspectionDate)
+      if (dto.status !== undefined) updateData.status = dto.status
+      if (dto.location !== undefined) updateData.location = dto.location
       
       this.logger.log(`📝 更新库存 ID=${id}, 数据:`, updateData)
       
@@ -91,15 +103,26 @@ export class DistributionService {
     }
   }
 
-  async batchCreateInventory(items: CreateInventoryDto[]) {
+  async batchCreateInventory(items: any[]) {
+    this.logger.log(`📦 批量导入 ${items.length} 条库存记录`);
+    
     return this.prisma.$transaction(
-      items.map(dto =>
+      items.map((dto: any, index: number) =>
         this.prisma.nickelInventory.create({
           data: {
-            tankNo: dto.batchNo,
-            concentration: dto.nickelContent ?? 99.96,
-            temperature: 25,
-            ph: 7,
+            // 为每条记录生成唯一的 tankNo（使用索引避免冲突）
+            tankNo: dto.tankNo || `${dto.batchNo || 'TANK'}-${index}-${Date.now()}`,
+            batchNo: dto.batchNo,
+            grade: dto.grade,
+            specification: dto.specification,
+            concentration: dto.concentration || parseFloat(dto.grade?.replace('Ni', '') || '99.96') / 100 || 99.96,
+            temperature: dto.temperature || 25,
+            ph: dto.ph || 7,
+            weight: dto.weight !== undefined ? parseFloat(dto.weight) : undefined,
+            pieceCount: dto.pieceCount !== undefined ? parseInt(dto.pieceCount) : undefined,
+            inspectionDate: dto.inspectionDate ? new Date(dto.inspectionDate) : undefined,
+            status: dto.status || 'available',
+            location: dto.location || undefined,
           },
         })
       )

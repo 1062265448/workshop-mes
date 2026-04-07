@@ -127,9 +127,17 @@ model ProductionRecord {
 model NickelInventory {
   id          Int      @id @default(autoincrement())
   tankNo      String   @unique
-  concentration Decimal @db.Decimal(10, 2)
-  temperature Decimal @db.Decimal(5, 2)
-  ph          Decimal @db.Decimal(4, 2)
+  batchNo     String?  // 批号
+  grade       String?  // 品级 Ni9996/Ni9990/Ni9980/Ni9950
+  specification String? // 规格 99.96%
+  concentration Decimal @db.Decimal(10, 2) // 浓度 (保留兼容)
+  temperature Decimal @db.Decimal(5, 2) // 温度 (保留兼容)
+  ph          Decimal @db.Decimal(4, 2) // PH 值 (保留兼容)
+  weight      Decimal? @db.Decimal(10, 2) // 重量 (kg)
+  pieceCount  Int?     // 片数
+  inspectionDate DateTime? // 检测日期
+  status      String   @default("available") // available/reserved/used
+  location    String?  // 储位
   lastUpdate  DateTime @default(now())
   deletedAt   DateTime?
   createdAt   DateTime @default(now())
