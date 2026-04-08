@@ -49,6 +49,7 @@
               :before-upload="beforeUpload"
               :on-success="onUploadSuccess"
               :on-error="onUploadError"
+              :on-progress="onProgress"
               drag
             >
               <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
@@ -57,7 +58,7 @@
               </div>
               <template #tip>
                 <div class="el-upload__tip">
-                  支持 jpg/png 格式
+                  支持 JPG/PNG/GIF 格式，最大 50MB
                 </div>
               </template>
             </el-upload>
@@ -92,10 +93,17 @@
       title="从样本库选择图片"
       width="900px"
       :close-on-click-modal="false"
+      @open="onSampleDialogOpen"
     >
       <div class="sample-dialog-content">
+        <!-- 加载状态 -->
+        <div v-if="loadingSamples" class="loading-state">
+          <el-icon class="is-loading" :size="48"><Loading /></el-icon>
+          <p>加载样本中...</p>
+        </div>
+
         <!-- 筛选工具栏 -->
-        <div class="filter-toolbar">
+        <div v-else class="filter-toolbar">
           <el-select
             v-model="filterDefectType"
             placeholder="缺陷类型"
@@ -118,10 +126,15 @@
             clearable
             @input="loadSamples"
           />
+          <div class="toolbar-info">
+            <el-tag type="info" size="small">
+              共 {{ total }} 个样本
+            </el-tag>
+          </div>
         </div>
 
         <!-- 样本列表 -->
-        <el-row :gutter="16" class="sample-grid">
+        <el-row v-if="samples.length > 0" :gutter="16" class="sample-grid">
           <el-col
             v-for="sample in samples"
             :key="sample.id"
@@ -137,21 +150,36 @@
                 :src="sample.imageUrl"
                 fit="cover"
                 class="sample-image"
+                :preview-src-list="[sample.imageUrl]"
+                @click.stop
               />
               <div class="sample-info">
                 <div class="sample-name">{{ sample.defectType?.name }}</div>
-                <div class="sample-date">{{ formatDate(sample.createdAt) }}</div>
+                <div class="sample-meta">
+                  <el-tag size="small" type="info">
+                    {{ sample.annotations?.length || 0 }} 个标注
+                  </el-tag>
+                  <span class="sample-date">{{ formatDate(sample.createdAt) }}</span>
+                </div>
               </div>
             </el-card>
           </el-col>
         </el-row>
 
+        <!-- 空状态 -->
+        <el-empty v-else-if="!loadingSamples" description="暂无样本">
+          <el-button type="primary" @click="showSampleDialog = false">
+            去上传样本
+          </el-button>
+        </el-empty>
+
         <!-- 分页 -->
         <el-pagination
+          v-if="total > pageSize"
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :total="total"
-          :page-sizes="[12, 24, 48]"
+          :page-sizes="[12, 24, 48, 96]"
           layout="total, sizes, prev, pager, next"
           class="pagination"
           @change="loadSamples"
@@ -210,6 +238,7 @@ const searchKeyword = ref('')
 const currentPage = ref(1)
 const pageSize = ref(24)
 const total = ref(0)
+const loadingSamples = ref(false)
 
 // 上传配置
 const API_BASE = 'http://localhost:3001'
@@ -227,6 +256,7 @@ const loadDefectTypes = async () => {
 
 // 加载样本列表
 const loadSamples = async () => {
+  loadingSamples.value = true
   try {
     const params: any = {
       page: currentPage.value,
@@ -241,7 +271,20 @@ const loadSamples = async () => {
     total.value = res.total || 0
   } catch (error: any) {
     console.error('加载样本失败:', error)
+    ElMessage.error('加载样本失败：' + (error.message || '未知错误'))
+  } finally {
+    loadingSamples.value = false
   }
+}
+
+// 对话框打开时加载样本
+const onSampleDialogOpen = () => {
+  currentPage.value = 1
+  filterDefectType.value = null
+  searchKeyword.value = ''
+  selectedSampleId.value = null
+  selectedSample.value = null
+  loadSamples()
 }
 
 // 获取上传数据
@@ -256,9 +299,15 @@ const getUploadData = () => {
 // 上传前验证
 const beforeUpload = (file: File) => {
   const isImage = file.type.startsWith('image/')
+  const maxSize = 50 * 1024 * 1024 // 50MB
 
   if (!isImage) {
-    ElMessage.error('只能上传图片文件！')
+    ElMessage.error('只能上传图片文件（JPG/PNG/GIF）！')
+    return false
+  }
+
+  if (file.size > maxSize) {
+    ElMessage.error(`图片大小不能超过 ${maxSize / 1024 / 1024}MB`)
     return false
   }
 
@@ -269,6 +318,15 @@ const beforeUpload = (file: File) => {
 
   ElMessage.info(`正在上传：${(file.size / 1024 / 1024).toFixed(2)}MB`)
   return true
+}
+
+// 上传进度
+const onProgress = (event: any) => {
+  const percent = Math.round((event.loaded / event.total) * 100)
+  ElMessage.info({
+    message: `上传进度：${percent}%`,
+    duration: 500,
+  })
 }
 
 // 上传成功
@@ -316,37 +374,51 @@ const confirmSampleSelection = () => {
 // 保存标注
 const handleSaveAnnotations = async (annotations: any[]) => {
   try {
+    // 获取图片实际尺寸用于坐标转换
+    const imgElement = document.createElement('img')
+    await new Promise<void>((resolve, reject) => {
+      imgElement.onload = () => resolve()
+      imgElement.onerror = reject
+      imgElement.src = selectedImage.value
+    })
+    
+    const imgWidth = imgElement.naturalWidth
+    const imgHeight = imgElement.naturalHeight
+    
+    // 将像素坐标转换为百分比坐标 (0-1)，保留 4 位小数
+    const normalizeAnnotations = annotations.map(anno => ({
+      x: Math.round((anno.x / imgWidth) * 10000) / 10000,
+      y: Math.round((anno.y / imgHeight) * 10000) / 10000,
+      width: Math.round((anno.width / imgWidth) * 10000) / 10000,
+      height: Math.round((anno.height / imgHeight) * 10000) / 10000,
+      defectTypeId: anno.defectTypeId,
+    }))
+    
     if (!sampleId.value) {
       // 创建新样本和标注
       const sampleData = {
         defectTypeId: defectTypeId.value,
         imageUrl: selectedImage.value.replace(API_BASE, ''),
-        annotations: annotations.map(anno => ({
-          x: anno.x,
-          y: anno.y,
-          width: anno.width,
-          height: anno.height,
-          defectTypeId: anno.defectTypeId,
-        })),
+        annotations: normalizeAnnotations,
       }
       await defectsApi.createDefectSample(sampleData)
     } else {
-      // 更新现有样本的标注：先删除所有旧标注，再创建新标注
-      // 1. 获取现有标注
+      // 更新现有样本的标注
       const sample: any = await defectsApi.getDefectSampleById(sampleId.value)
       
-      // 2. 删除所有旧标注
+      // 删除所有旧标注
       if (sample.annotations && sample.annotations.length > 0) {
-        for (const anno of sample.annotations) {
-          await defectsApi.deleteAnnotation(anno.id)
-        }
+        const deletePromises = sample.annotations.map((anno: any) => 
+          defectsApi.deleteAnnotation(anno.id)
+        )
+        await Promise.all(deletePromises)
       }
       
-      // 3. 如果有新标注，创建新标注（如果 annotations 为空，表示清空所有标注）
-      if (annotations && annotations.length > 0) {
-        for (const anno of annotations) {
-          await defectsApi.createAnnotation(
-            sampleId.value,
+      // 创建新标注（并行执行）
+      if (normalizeAnnotations && normalizeAnnotations.length > 0) {
+        const createPromises = normalizeAnnotations.map(anno => 
+          defectsApi.createAnnotation(
+            sampleId.value!,
             anno.defectTypeId,
             {
               x: anno.x,
@@ -355,7 +427,8 @@ const handleSaveAnnotations = async (annotations: any[]) => {
               height: anno.height,
             }
           )
-        }
+        )
+        await Promise.all(createPromises)
       }
     }
 
@@ -505,10 +578,43 @@ onMounted(() => {
   gap: 12px;
   margin-bottom: 24px;
   padding: 0 16px;
+  align-items: center;
+}
+
+.toolbar-info {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #94a3b8;
+  gap: 16px;
 }
 
 .sample-grid {
   padding: 0 16px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.sample-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.sample-date {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-left: auto;
 }
 
 .sample-card {
@@ -516,23 +622,31 @@ onMounted(() => {
   cursor: pointer;
   transition: all 0.3s ease;
   border: 2px solid transparent;
+  overflow: hidden;
 }
 
 .sample-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+  border-color: #cbd5e1;
 }
 
 .sample-card.selected {
   border-color: #3b82f6;
-  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.3);
+  background: linear-gradient(135deg, #eff6ff 0%, #fff 100%);
 }
 
 .sample-image {
   width: 100%;
-  height: 200px;
+  height: 180px;
   object-fit: cover;
   border-radius: 8px;
+  transition: transform 0.3s ease;
+}
+
+.sample-card:hover .sample-image {
+  transform: scale(1.05);
 }
 
 .sample-info {
