@@ -34,17 +34,21 @@ model User {
 model Meeting {
   id          Int      @id @default(autoincrement())
   title       String
-  description String?
+  description String?  @db.Text
+  type        String   @default("general") // general, weekly, review, emergency
   startTime   DateTime
   endTime     DateTime
   location    String?
   organizerId Int
   status      String   @default("scheduled") // scheduled, ongoing, completed, cancelled
+  notes       String?  @db.Text // 会议纪要
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   organizer   User                 @relation("MeetingOrganizer", fields: [organizerId], references: [id])
   participants MeetingParticipant[]
+  tasks       MeetingTask[]
+  attachments MeetingAttachment[]
 }
 
 model MeetingParticipant {
@@ -58,6 +62,34 @@ model MeetingParticipant {
   user    User    @relation(fields: [userId], references: [id])
 
   @@unique([meetingId, userId])
+}
+
+model MeetingTask {
+  id          Int      @id @default(autoincrement())
+  meetingId   Int
+  title       String
+  description String?  @db.Text
+  assigneeId  Int?
+  dueDate     DateTime?
+  status      String   @default("pending") // pending, in_progress, done, cancelled
+  priority    String   @default("medium") // low, medium, high, urgent
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}
+
+model MeetingAttachment {
+  id        Int      @id @default(autoincrement())
+  meetingId Int
+  name      String
+  url       String
+  size      Int?     // 文件大小 (字节)
+  type      String?  // 文件类型
+  createdAt DateTime @default(now())
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 }
 
 // ==================== 安全管理 ====================

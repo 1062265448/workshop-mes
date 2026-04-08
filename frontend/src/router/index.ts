@@ -21,7 +21,7 @@ const routes = [
       {
         path: 'meetings',
         name: 'Meetings',
-        component: () => import('@/views/Placeholder.vue'),
+        component: () => import('@/views/meetings/Meetings.vue'),
         meta: { title: '会议管理' },
       },
       {

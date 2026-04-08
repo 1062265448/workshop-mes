@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { DistributionModule } from './distribution/distribution.module';
 import { DefectsModule } from './defects/defects.module';
+import { MeetingsModule } from './meetings/meetings.module';
 import { CommonModule } from './common/common.module';
 import { PrismaService } from './prisma/prisma.service';
 
@@ -14,6 +15,7 @@ import { PrismaService } from './prisma/prisma.service';
     CommonModule,
     DistributionModule,
     DefectsModule,
+    MeetingsModule,
   ],
   controllers: [],
   providers: [PrismaService],
