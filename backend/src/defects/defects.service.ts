@@ -54,12 +54,8 @@ export class DefectsService {
   }
 
   async createDefectType(dto: CreateDefectTypeDto) {
-    // 自动生成代码
-    const code = dto.code || `DEFECT-${Date.now()}`;
-
     return this.prisma.defectType.create({
       data: {
-        code,
         name: dto.name,
         description: dto.description,
         category: dto.category,

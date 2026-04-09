@@ -1,0 +1,35 @@
+export class CreateBatchAnalysisDto {
+  day?: string;
+  dayTime?: Date;
+  workshop?: number;
+  productline?: number;
+  batchNo?: string;
+  level?: number;
+  productName?: number;
+  analysUser?: string;
+  analysNo?: string;
+  analysResult?: number;
+  downBatchNo?: string;
+  batchCreateTime?: Date;
+  no?: number;
+  remark?: string;
+  cu?: string;
+  co?: string;
+  s?: string;
+  pb?: string;
+  zn?: string;
+  ass?: string;
+  bi?: string;
+  sb?: string;
+  mn?: string;
+  cd?: string;
+  fe?: string;
+  mg?: string;
+  al?: string;
+  si?: string;
+  c?: string;
+  p?: string;
+  sn?: string;
+  other?: string;
+  nico?: string;
+}

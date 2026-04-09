@@ -1,8 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { DistributionModule } from './distribution/distribution.module';
-import { DefectsModule } from './defects/defects.module';
-import { MeetingsModule } from './meetings/meetings.module';
+import { ProductionModule } from './production/production.module';
 import { CommonModule } from './common/common.module';
 import { PrismaService } from './prisma/prisma.service';
 
@@ -13,9 +11,10 @@ import { PrismaService } from './prisma/prisma.service';
       envFilePath: '.env',
     }),
     CommonModule,
-    DistributionModule,
-    DefectsModule,
-    MeetingsModule,
+    // DistributionModule,  // 暂时禁用，待重构
+    // DefectsModule,       // 暂时禁用，待修复
+    // MeetingsModule,      // 暂时禁用
+    ProductionModule,
   ],
   controllers: [],
   providers: [PrismaService],

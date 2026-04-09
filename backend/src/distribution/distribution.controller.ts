@@ -113,10 +113,9 @@ export class DistributionController {
       // 保存失败历史
       await this.distributionService.saveRecognitionHistory(
         `/uploads/inventory/${file.filename}`,
-        {},
+        { error: error.message },
         0,
-        'failed',
-        error.message
+        'failed'
       );
       
       return {
