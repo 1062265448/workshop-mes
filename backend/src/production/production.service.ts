@@ -7,19 +7,51 @@ import { CreateInventoryDto } from './dto/create-inventory.dto';
 @Injectable()
 export class ProductionService {
   constructor(private readonly prisma: PrismaService) {}
+  
+  // 内存缓存
+  private cache = new Map<string, { data: any; timestamp: number }>()
+  private readonly CACHE_DURATION = 5 * 60 * 1000 // 5 分钟
+  
+  // 清除缓存（用于调试）
+  clearCache() {
+    this.cache.clear();
+  }
 
   // ==================== 车间管理 ====================
 
   async getWorkshops() {
-    return this.prisma.workshop.findMany({
+    const cacheKey = 'workshops';
+    const cached = this.cache.get(cacheKey);
+    
+    if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
+      return cached.data;
+    }
+    
+    const data = await this.prisma.workshop.findMany({
       where: { isActive: 1 },
       orderBy: { sortOrder: 'asc' },
     });
+    
+    // 去重处理
+    const uniqueData = Array.from(
+      new Map(data.map(item => [item.id, item])).values()
+    );
+    
+    console.log(`✅ 车间数据：${uniqueData.length} 条`);
+    this.cache.set(cacheKey, { data: uniqueData, timestamp: Date.now() });
+    return uniqueData;
   }
 
   // ==================== 产品规格管理 ====================
 
   async getProducts(params: { category?: string; productCode?: string }) {
+    const cacheKey = `products:${params.category || ''}:${params.productCode || ''}`;
+    const cached = this.cache.get(cacheKey);
+    
+    if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
+      return cached.data;
+    }
+    
     const { category, productCode } = params;
     const where: any = { isActive: 1 };
 
@@ -30,10 +62,18 @@ export class ProductionService {
       where.productCode = productCode;
     }
 
-    return this.prisma.productSpec.findMany({
+    const data = await this.prisma.productSpec.findMany({
       where,
       orderBy: { sortOrder: 'asc' },
     });
+    
+    // 去重处理
+    const uniqueData = Array.from(
+      new Map(data.map(item => [item.id, item])).values()
+    );
+    
+    this.cache.set(cacheKey, { data: uniqueData, timestamp: Date.now() });
+    return uniqueData;
   }
 
   // ==================== 入库管理 ====================

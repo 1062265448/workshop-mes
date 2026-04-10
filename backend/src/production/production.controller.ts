@@ -22,7 +22,15 @@ export class ProductionController {
 
   @Get('workshops')
   async getWorkshops() {
+    // 车间数据不常变，可以缓存
     return this.productionService.getWorkshops();
+  }
+  
+  // 清除缓存（调试用）
+  @Post('cache/clear')
+  async clearCache() {
+    this.productionService.clearCache();
+    return { message: '缓存已清除' };
   }
 
   // ==================== 产品规格管理 ====================

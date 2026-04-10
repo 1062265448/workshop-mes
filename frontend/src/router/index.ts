@@ -37,6 +37,12 @@ const routes = [
         meta: { title: '生产管理' },
       },
       {
+        path: 'production/dashboard',
+        name: 'ProductionDashboard',
+        component: () => import('@/views/production/Dashboard.vue'),
+        meta: { title: '数据看板' },
+      },
+      {
         path: 'projects',
         name: 'Projects',
         component: () => import('@/views/Placeholder.vue'),

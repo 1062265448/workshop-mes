@@ -9,6 +9,12 @@
         </h1>
         <p class="page-desc">镍冶炼厂成品车间产品动态管理</p>
       </div>
+      <div class="header-actions">
+        <el-button type="primary" @click="openDashboard">
+          <el-icon><DataAnalysis /></el-icon>
+          数据看板
+        </el-button>
+      </div>
     </div>
 
     <!-- 选项卡 -->
@@ -582,9 +588,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { List, Plus } from '@element-plus/icons-vue'
+import { List, Plus, DataAnalysis } from '@element-plus/icons-vue'
 import * as productionApi from '@/api/production'
+import { debounce } from '@/utils/debounce'
+
+const router = useRouter()
 
 // 状态
 const activeTab = ref('inbound')
@@ -673,10 +683,17 @@ const formatDate = (date) => {
   return new Date(date).toLocaleDateString('zh-CN')
 }
 
-// 加载基础数据
+// 加载基础数据（带缓存）
 const loadWorkshops = async () => {
   try {
-    workshops.value = await productionApi.getWorkshops()
+    // 使用缓存，避免重复请求
+    const res = await productionApi.getWorkshops()
+    // 去重处理
+    const data = res.data || res
+    const uniqueData = Array.from(new Map(data.map(item => [item.id, item])).values())
+    // 直接赋值，不使用 push 避免重复
+    workshops.value = uniqueData
+    console.log('✅ 车间数据已加载:', uniqueData.length, '条')
   } catch (error) {
     console.error('加载车间失败:', error)
   }
@@ -684,14 +701,22 @@ const loadWorkshops = async () => {
 
 const loadProducts = async () => {
   try {
-    products.value = await productionApi.getProducts()
+    // 使用缓存，避免重复请求
+    const res = await productionApi.getProducts()
+    // 去重处理
+    const data = res.data || res
+    const uniqueData = Array.from(new Map(data.map(item => [item.id, item])).values())
+    // 直接赋值，不使用 push 避免重复
+    products.value = uniqueData
+    console.log('✅ 产品数据已加载:', uniqueData.length, '条')
   } catch (error) {
     console.error('加载产品失败:', error)
   }
 }
 
 // 入库管理
-const loadInboundRecords = async () => {
+// 防抖版本的加载函数
+const loadInboundRecords = debounce(async () => {
   loading.value = true
   try {
     const params: any = {
@@ -715,7 +740,7 @@ const loadInboundRecords = async () => {
   } finally {
     loading.value = false
   }
-}
+}, 300)
 
 const handleDateChange = () => {
   inboundPage.value = 1
@@ -786,7 +811,8 @@ const resetInboundForm = () => {
 }
 
 // 发运管理
-const loadShippingRecords = async () => {
+// 防抖版本的加载函数
+const loadShippingRecords = debounce(async () => {
   loading.value = true
   try {
     const params: any = { page: shippingPage.value, limit: shippingPageSize.value }
@@ -804,7 +830,7 @@ const loadShippingRecords = async () => {
   } finally {
     loading.value = false
   }
-}
+}, 300)
 
 const handleShippingDateChange = () => {
   shippingPage.value = 1
@@ -869,7 +895,8 @@ const resetShippingForm = () => {
 }
 
 // 库存管理
-const loadInventory = async () => {
+// 防抖版本的加载函数
+const loadInventory = debounce(async () => {
   loading.value = true
   try {
     const params: any = {
@@ -891,7 +918,7 @@ const loadInventory = async () => {
   } finally {
     loading.value = false
   }
-}
+}, 300)
 
 const editInventory = (row) => {
   editingInventoryId.value = row.id
@@ -982,6 +1009,11 @@ const loadExportStats = async () => {
   } catch (error: any) {
     ElMessage.error('加载统计失败')
   }
+}
+
+// 打开数据看板
+const openDashboard = () => {
+  router.push('/production/dashboard')
 }
 
 onMounted(() => {
