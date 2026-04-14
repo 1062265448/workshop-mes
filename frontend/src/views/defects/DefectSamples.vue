@@ -648,18 +648,14 @@ const getStatusText = (status: string) => {
   return map[status] || status
 }
 
-// 获取缺陷类型颜色（与标注工具保持一致）
-const getDefectTypeColor = (defectType: any) => {
-  if (!defectType) return '#ff0000'
-  
-  // 统一的颜色配置（蓝色/橙色/粉色）
-  const colorMap: any = {
-    '不锈钢专用镍 (3#)': '#3b82f6',        // 蓝色
-    '不锈钢专用镍 (绿色结晶)': '#f97316',  // 橙色
-    '不锈钢专用镍 (氢氧化镍)': '#ec4899',  // 粉色
-  }
-  
-  return colorMap[defectType.name] || defectType.color || '#ff0000'
+// 获取缺陷类型颜色（支持传入 defectType 对象或 defectTypeId）
+const getDefectTypeColor = (defectTypeOrId: any) => {
+  if (!defectTypeOrId) return '#ff0000'
+  // 如果是对象，直接取 color
+  if (typeof defectTypeOrId === 'object') return defectTypeOrId.color || '#ff0000'
+  // 如果是 ID，从 defectTypes 中查找
+  const type = defectTypes.value.find((t: any) => t.id === defectTypeOrId)
+  return type?.color || '#ff0000'
 }
 
 // 将像素值转换为百分比（假设图片最大尺寸为 4000x3000）

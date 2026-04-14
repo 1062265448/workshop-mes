@@ -12,6 +12,15 @@
           {{ isDrawing ? '取消绘制' : '绘制标注框' }}
         </el-button>
         
+        <el-button
+          :type="isPanning ? 'warning' : 'default'"
+          @click="togglePanMode"
+          :disabled="!imageLoaded"
+        >
+          <el-icon><Rank /></el-icon>
+          {{ isPanning ? '平移模式' : '拖动平移' }}
+        </el-button>
+        
         <el-select 
           v-model="selectedDefectType"
           placeholder="选择缺陷类型"
@@ -77,7 +86,7 @@
       <div 
         class="canvas-wrapper" 
         :style="{
-          transform: `scale(${zoomLevel})`,
+          transform: `scale(${zoomLevel}) translate(${panX}px, ${panY}px)`,
           transformOrigin: 'center center'
         }"
       >
@@ -101,7 +110,8 @@
           @mousedown="onMouseDown"
           @mousemove="onMouseMove"
           @mouseup="onMouseUp"
-          @mouseleave="onMouseUp"
+          @mouseleave="onMouseLeave"
+          @contextmenu.prevent
         ></canvas>
 
         <!-- 加载提示 -->
@@ -241,7 +251,7 @@ import { ref, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Plus, Refresh, Check, Loading, Edit, Delete, 
-  RefreshLeft, RefreshRight, ZoomIn, ZoomOut 
+  RefreshLeft, RefreshRight, Rank
 } from '@element-plus/icons-vue'
 import * as defectsApi from '@/api/defects'
 
@@ -255,6 +265,7 @@ const props = defineProps<{
 // Emits
 const emit = defineEmits<{
   (e: 'save', annotations: any[]): void
+  (e: 'change', count: number): void  // 标注数量变化时触发
   (e: 'close'): void
 }>()
 
@@ -324,6 +335,13 @@ const resizeHandle = ref<string>('')
 const zoomLevel = ref<number | 'fit'>(1)
 const originalImageWidth = ref(0)
 const originalImageHeight = ref(0)
+
+// 平移状态
+const isPanning = ref(false)
+const isPanningActive = ref(false) // 实际拖拽中
+const panX = ref(0)
+const panY = ref(0)
+const panStart = ref({ x: 0, y: 0 })
 
 // 加载缺陷类型
 const loadDefectTypes = async () => {
@@ -437,12 +455,15 @@ const drawAllAnnotations = () => {
   }
 }
 
-// 绘制单个矩形
+// 绘制单个矩形（根据缩放级别调整线宽和字体大小）
 const drawRectangle = (ctx: CanvasRenderingContext2D, rect: any, isActive: boolean = false) => {
   const color = getDefectTypeColor(rect.defectTypeId) || '#ff0000'
+  const z = typeof zoomLevel.value === 'number' ? zoomLevel.value : 1
+  // 反向缩放：zoom 越大线越细，保持视觉一致
+  const inv = 1 / z
   
   ctx.strokeStyle = color
-  ctx.lineWidth = isActive ? 4 : 2
+  ctx.lineWidth = (isActive ? 4 : 2) * inv
   ctx.fillStyle = color + '33'
 
   ctx.beginPath()
@@ -452,21 +473,23 @@ const drawRectangle = (ctx: CanvasRenderingContext2D, rect: any, isActive: boole
 
   if (rect.defectTypeId) {
     const name = getDefectTypeName(rect.defectTypeId)
-    ctx.font = 'bold 24px Arial'
+    const fontSize = Math.round(24 * inv)
+    ctx.font = `bold ${fontSize}px Arial`
     ctx.fillStyle = '#fff'
     ctx.strokeStyle = '#000'
-    ctx.lineWidth = 4
-    ctx.strokeText(name, rect.x, rect.y - 12)
-    ctx.fillText(name, rect.x, rect.y - 12)
+    ctx.lineWidth = 4 * inv
+    const labelY = Math.round(12 * inv)
+    ctx.strokeText(name, rect.x, rect.y - labelY)
+    ctx.fillText(name, rect.x, rect.y - labelY)
   }
 
   if (isActive) {
-    drawResizeHandles(ctx, rect, color)
+    drawResizeHandles(ctx, rect, color, inv)
   }
 }
 
 // 绘制调整大小的控制点
-const drawResizeHandles = (ctx: CanvasRenderingContext2D, rect: any, color: string) => {
+const drawResizeHandles = (ctx: CanvasRenderingContext2D, rect: any, color: string, inv: number = 1) => {
   const handles = [
     { x: rect.x, y: rect.y, name: 'nw' },
     { x: rect.x + rect.width, y: rect.y, name: 'ne' },
@@ -474,16 +497,30 @@ const drawResizeHandles = (ctx: CanvasRenderingContext2D, rect: any, color: stri
     { x: rect.x + rect.width, y: rect.y + rect.height, name: 'se' },
   ]
 
+  const size = Math.round(10 * inv)
+  const half = Math.round(5 * inv)
+
   ctx.fillStyle = '#fff'
   ctx.strokeStyle = color
-  ctx.lineWidth = 2
+  ctx.lineWidth = 2 * inv
 
   handles.forEach(handle => {
     ctx.beginPath()
-    ctx.rect(handle.x - 5, handle.y - 5, 10, 10)
+    ctx.rect(handle.x - half, handle.y - half, size, size)
     ctx.fill()
     ctx.stroke()
   })
+}
+
+// 切换平移模式
+const togglePanMode = () => {
+  isPanning.value = !isPanning.value
+  if (isPanning.value) {
+    isDrawing.value = false
+    editingIndex.value = null
+    currentRect.value = null
+    ElMessage.info('平移模式：在画布上拖拽移动图片')
+  }
 }
 
 // 切换绘制模式
@@ -516,6 +553,8 @@ const startDrawing = () => {
 // 获取光标样式
 const getCursorStyle = () => {
   if (!imageLoaded.value) return 'not-allowed'
+  if (isPanningActive.value) return 'grabbing'
+  if (isPanning.value) return 'grab'
   if (isDrawing.value) return 'crosshair'
   if (isResizing.value) return 'nwse-resize'
   if (isDragging.value) return 'move'
@@ -541,6 +580,14 @@ const onMouseDown = (e: MouseEvent) => {
 
   const x = (e.clientX - rect.left) * scaleX
   const y = (e.clientY - rect.top) * scaleY
+
+  // 中键或平移模式 → 平移图片
+  if (e.button === 1 || isPanning.value) {
+    if (e.button === 1) e.preventDefault()
+    isPanningActive.value = true
+    panStart.value = { x: e.clientX, y: e.clientY }
+    return
+  }
 
   if (editingIndex.value !== null) {
     const anno = annotations[editingIndex.value]
@@ -597,6 +644,16 @@ const getResizeHandle = (x: number, y: number, rect: any): string => {
 const onMouseMove = (e: MouseEvent) => {
   if (!canvasRef.value) return
 
+  // 平移中
+  if (isPanningActive.value) {
+    const dx = e.clientX - panStart.value.x
+    const dy = e.clientY - panStart.value.y
+    panX.value += dx
+    panY.value += dy
+    panStart.value = { x: e.clientX, y: e.clientY }
+    return
+  }
+
   const rect = canvasRef.value.getBoundingClientRect()
   const scaleX = canvasRef.value.width / rect.width
   const scaleY = canvasRef.value.height / rect.height
@@ -651,6 +708,11 @@ const onMouseMove = (e: MouseEvent) => {
 
 // 鼠标释放
 const onMouseUp = () => {
+  if (isPanningActive.value) {
+    isPanningActive.value = false
+    return
+  }
+
   if (isDragging.value) {
     isDragging.value = false
     return
@@ -679,6 +741,7 @@ const onMouseUp = () => {
     }
 
     annotations.push({ ...currentRect.value })
+    emit('change', annotations.length)
 
     isDrawing.value = false
     currentRect.value = null
@@ -686,6 +749,18 @@ const onMouseUp = () => {
     drawAllAnnotations()
 
     ElMessage.success('标注已添加')
+  }
+}
+
+// 鼠标离开画布（取消平移/拖拽/绘制/缩放）
+const onMouseLeave = () => {
+  isPanningActive.value = false
+  isDragging.value = false
+  isResizing.value = false
+  if (isDrawing.value) {
+    isDrawing.value = false
+    currentRect.value = null
+    ElMessage.info('鼠标离开画布，已取消绘制')
   }
 }
 
@@ -725,6 +800,7 @@ const deleteAnnotation = (index: number) => {
     editingIndex.value = null
   }
   drawAllAnnotations()
+  emit('change', annotations.length)
   ElMessage.success('标注已删除')
 }
 
@@ -736,6 +812,7 @@ const clearAll = () => {
     annotations.splice(0, annotations.length)
     editingIndex.value = null
     drawAllAnnotations()
+    emit('change', 0)
     ElMessage.success('已清空所有标注')
   }).catch(() => {})
 }
@@ -746,6 +823,10 @@ const resetView = () => {
   editingIndex.value = null
   isDrawing.value = false
   currentRect.value = null
+  // 重置平移
+  panX.value = 0
+  panY.value = 0
+  isPanning.value = false
 }
 
 // 保存标注
@@ -842,6 +923,13 @@ const handleKeyDown = (e: KeyboardEvent) => {
   // R 重置视图
   if (e.key === 'r' || e.key === 'R') {
     resetView()
+    return
+  }
+  
+  // Space 快速切换平移
+  if (e.key === ' ') {
+    e.preventDefault()
+    togglePanMode()
     return
   }
   

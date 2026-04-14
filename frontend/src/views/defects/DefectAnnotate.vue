@@ -84,6 +84,7 @@
         :sample-id="sampleId"
         :defect-type-id="defectTypeId"
         @save="handleSaveAnnotations"
+        @change="onAnnotationsChange"
       />
     </div>
 
@@ -225,6 +226,7 @@ const defectTypeId = ref<number | undefined>()
 const showSampleDialog = ref(false)
 const selectedSampleId = ref<number | null>(null)
 const selectedSample = ref<any>(null)
+const hasUnsavedChanges = ref(false) // 是否有未保存的修改
 
 // 上传表单
 const uploadForm = reactive({
@@ -372,8 +374,32 @@ const confirmSampleSelection = () => {
   ElMessage.success('已选择样本')
 }
 
+// 返回
+const handleBack = () => {
+  if (hasUnsavedChanges.value) {
+    ElMessageBox.confirm('确定要返回吗？未保存的标注将会丢失。', '提示', {
+      type: 'warning'
+    }).then(() => {
+      sessionStorage.removeItem('annotate_image')
+      sessionStorage.removeItem('annotate_sampleId')
+      sessionStorage.removeItem('annotate_defectTypeId')
+      router.push('/defects/samples')
+    }).catch(() => {})
+  } else {
+    // 无未保存修改，直接返回
+    sessionStorage.removeItem('annotate_image')
+    sessionStorage.removeItem('annotate_sampleId')
+    sessionStorage.removeItem('annotate_defectTypeId')
+    router.push('/defects/samples')
+  }
+}
+
+// 标注变化时更新未保存标记
+const onAnnotationsChange = (count: number) => {
+  hasUnsavedChanges.value = count > 0
+}
+
 // 保存标注（单请求：事务保证原子性）
-const handleSaveAnnotations = async (annotations: any[]) => {
   try {
     // 获取图片实际尺寸用于坐标转换
     const imgElement = document.createElement('img')
@@ -413,6 +439,7 @@ const handleSaveAnnotations = async (annotations: any[]) => {
     }
 
     ElMessage.success('标注保存成功')
+    hasUnsavedChanges.value = false // 保存成功，清除标记
     
     // 不清除本地存储，保持在标注页面
     // sessionStorage.removeItem('annotate_image')
@@ -425,19 +452,6 @@ const handleSaveAnnotations = async (annotations: any[]) => {
     console.error('保存标注失败:', error)
     ElMessage.error('保存失败：' + (error.response?.data?.message || error.message))
   }
-}
-
-// 返回
-const handleBack = () => {
-  ElMessageBox.confirm('确定要返回吗？未保存的标注将会丢失。', '提示', {
-    type: 'warning'
-  }).then(() => {
-    // 清除本地存储
-    sessionStorage.removeItem('annotate_image')
-    sessionStorage.removeItem('annotate_sampleId')
-    sessionStorage.removeItem('annotate_defectTypeId')
-    router.push('/defects/samples')
-  }).catch(() => {})
 }
 
 // 格式化日期
