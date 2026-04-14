@@ -7,13 +7,16 @@ import {
   Param,
   Delete,
   Query,
-  ParseIntPipe,
-  Patch,
-  Logger,
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  ParseIntPipe,
+  Logger,
+  Patch,
+  ArgumentMetadata,
+  Injectable,
 } from '@nestjs/common';
+import { PipeTransform } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -29,17 +32,25 @@ import {
   UpdateCustomerDto,
 } from './dto/create-inventory.dto';
 
+@Injectable()
+class OptionalIntPipe implements PipeTransform {
+  transform(value: any, metadata: ArgumentMetadata) {
+    if (value === undefined || value === null || value === '') return undefined;
+    const parsed = parseInt(value, 10);
+    return isNaN(parsed) ? undefined : parsed;
+  }
+}
+
 @Controller('distribution')
 export class DistributionController {
   private readonly logger = new Logger(DistributionController.name);
-  private readonly uploadDir: string = './uploads/inventory';
 
   constructor(
     private readonly distributionService: DistributionService,
     private readonly qwenAI: QwenAIService,
   ) {
     try {
-      mkdirSync(this.uploadDir, { recursive: true });
+      mkdirSync('./uploads/inventory', { recursive: true });
     } catch (e) {}
   }
 
@@ -54,8 +65,8 @@ export class DistributionController {
 
   @Get('inventory')
   async getInventory(
-    @Query('page', new ParseIntPipe({ optional: true })) page?: number,
-    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+    @Query('page', OptionalIntPipe) page?: number,
+    @Query('limit', OptionalIntPipe) limit?: number,
     @Query('keyword') keyword?: string,
     @Query('grade') grade?: string,
     @Query('status') status?: string,
@@ -74,7 +85,7 @@ export class DistributionController {
   }
 
   @Post('inventory/batch')
-  async batchCreateInventory(@Body() items: CreateInventoryDto[]) {
+  async batchCreateInventory(@Body() items: any[]) {
     return this.distributionService.batchCreateInventory(items);
   }
 
@@ -97,14 +108,14 @@ export class DistributionController {
   @UseInterceptors(
     FileInterceptor('image', {
       storage: diskStorage({
-        destination: './uploads/inventory',
-        filename: (req, file, cb) => {
-          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        destination: (_req, _file, cb) => cb(null, './uploads/inventory'),
+        filename: (_req, file, cb) => {
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
           cb(null, 'inventory-' + uniqueSuffix + extname(file.originalname));
         },
       }),
       limits: { fileSize: 10 * 1024 * 1024 },
-      fileFilter: (req, file, cb) => {
+      fileFilter: (_req, file, cb) => {
         if (file.mimetype.startsWith('image/')) {
           cb(null, true);
         } else {
@@ -121,7 +132,6 @@ export class DistributionController {
       const aiResult = await this.qwenAI.identifyInventoryTable(file.path);
       this.logger.log(`✅ AI 识别成功，识别到 ${aiResult.length} 条记录`);
 
-      // 提取批号和品级（从第一条记录）
       const batchNo = aiResult[0]?.batchNo || '';
       const grade = aiResult[0]?.grade || '';
       const date = aiResult[0]?.date || '';
@@ -139,11 +149,8 @@ export class DistributionController {
 
       return {
         success: true,
-        message: `AI 识别成功，共 ${aiResult.length} 条记录`,
-        imageUrl: `/uploads/inventory/${file.filename}`,
-        filename: file.originalname,
-        size: file.size,
         data: aiResult,
+        count: aiResult.length,
       };
     } catch (error: any) {
       this.logger.error(`❌ AI 识别失败：${error.message}`);
@@ -159,7 +166,6 @@ export class DistributionController {
       return {
         success: false,
         error: error.message,
-        message: 'AI 识别失败，请手动录入',
       };
     }
   }
@@ -201,7 +207,7 @@ export class DistributionController {
     @Query('page', new ParseIntPipe({ optional: true })) page?: number,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
     @Query('status') status?: string,
-    @Query('customerId', new ParseIntPipe({ optional: true })) customerId?: number,
+    @Query('customerId', OptionalIntPipe) customerId?: number,
   ) {
     return this.distributionService.getOrders(page || 1, limit || 20, status, customerId);
   }

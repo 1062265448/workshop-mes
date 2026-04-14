@@ -159,6 +159,7 @@ export class DistributionService {
         include: { items: { include: { stock: true } } },
       });
 
+      // Lock stock
       for (const item of dto.items) {
         await tx.inventoryStock.update({
           where: { id: item.stockId },

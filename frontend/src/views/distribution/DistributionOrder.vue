@@ -24,7 +24,7 @@
         <div class="stat-card">
           <div class="stat-icon" style="background:#3b82f6">📦</div>
           <div class="stat-info">
-            <div class="stat-value">{{ stats.inventory.total }}</div>
+            <div class="stat-value">{{ stats.inventory?.total || 0 }}</div>
             <div class="stat-label">库存批次</div>
           </div>
         </div>
@@ -33,7 +33,7 @@
         <div class="stat-card">
           <div class="stat-icon" style="background:#22c55e">✅</div>
           <div class="stat-info">
-            <div class="stat-value">{{ stats.inventory.available }}</div>
+            <div class="stat-value">{{ stats.inventory?.available || 0 }}</div>
             <div class="stat-label">可用库存</div>
           </div>
         </div>
@@ -42,7 +42,7 @@
         <div class="stat-card">
           <div class="stat-icon" style="background:#f59e0b">📋</div>
           <div class="stat-info">
-            <div class="stat-value">{{ stats.orders.total }}</div>
+            <div class="stat-value">{{ stats.orders?.total || 0 }}</div>
             <div class="stat-label">配货单</div>
           </div>
         </div>
@@ -51,7 +51,7 @@
         <div class="stat-card">
           <div class="stat-icon" style="background:#ef4444">⏳</div>
           <div class="stat-info">
-            <div class="stat-value">{{ stats.orders.draft + stats.orders.confirmed }}</div>
+            <div class="stat-value">{{ (stats.orders?.draft || 0) + (stats.orders?.confirmed || 0) }}</div>
             <div class="stat-label">待处理订单</div>
           </div>
         </div>
@@ -188,7 +188,7 @@
       <div v-if="!editingInvId" class="ai-recognize-section">
         <el-alert title="🤖 AI 智能识别" description="上传库存计量报表照片，自动识别包号、块数、重量等信息" type="info" :closable="false" show-icon />
 
-        <el-upload ref="uploadRef" :action="''" :auto-upload="false" :before-upload="beforeAIUpload" :http-request="handleCustomUpload" name="image" accept="image/*" drag :show-file-list="false">
+        <el-upload ref="uploadRef" :action="''" :auto-upload="true" :before-upload="beforeAIUpload" :http-request="handleCustomUpload" name="image" accept="image/*" drag :show-file-list="false">
           <el-icon :size="48" style="color:#409eff"><PictureFilled /></el-icon>
           <div class="upload-text">拖拽文件到此处或 <em>点击上传</em></div>
           <template #tip><div class="upload-tip">支持 jpg/png 格式，不超过 10MB</div></template>
@@ -397,46 +397,135 @@
       </el-form>
       <template #footer>
         <el-button @click="showShipDialog=false">取消</el-button>
-        <el-button type="primary" @click="confirmShip">确认发货</el-button>
+        <el-button type="primary" @click="confirmShip" :loading="shipSubmitting">确认发货</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 客户管理对话框 -->
+    <el-dialog v-model="showCustomerDialog" title="客户管理" width="600px">
+      <div style="margin-bottom:12px">
+        <el-button type="primary" size="small" @click="openAddCustomer"><el-icon><Plus /></el-icon> 新增客户</el-button>
+      </div>
+      <el-table :data="customers" border>
+        <el-table-column prop="name" label="名称" />
+        <el-table-column prop="phone" label="电话" width="140" />
+        <el-table-column prop="contact" label="联系人" width="120" />
+        <el-table-column label="操作" width="80">
+          <template #default="{ row }">
+            <el-button link type="danger" @click="deleteCustomer(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
+    <!-- 新增客户对话框 -->
+    <el-dialog v-model="showAddCustomerDialog" title="新增客户" width="500px" append-to-body>
+      <el-form :model="customerForm" label-width="80px">
+        <el-form-item label="名称" required><el-input v-model="customerForm.name" /></el-form-item>
+        <el-form-item label="联系人"><el-input v-model="customerForm.contact" /></el-form-item>
+        <el-form-item label="电话"><el-input v-model="customerForm.phone" /></el-form-item>
+        <el-form-item label="地址"><el-input v-model="customerForm.address" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showAddCustomerDialog=false">取消</el-button>
+        <el-button type="primary" @click="submitCustomer">保存</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ShoppingCart, Plus, Refresh, Search, Document, Delete, PictureFilled, Loading } from '@element-plus/icons-vue'
+import { ShoppingCart, Document, Refresh, Plus, Delete, Loading, PictureFilled } from '@element-plus/icons-vue'
 import * as distApi from '@/api/distribution'
-import { compressImage } from '@/utils/imageCompressor'
 
+// ==================== 状态 ====================
 const activeTab = ref('inventory')
+const stats = ref<any>({ inventory: {}, orders: {} })
+const customers = ref<any[]>([])
 
-// ========== 统计 ==========
-const stats = reactive({
-  inventory: { total: 0, available: 0, reserved: 0, shipped: 0 },
-  orders: { total: 0, draft: 0, confirmed: 0, shipping: 0, shipped: 0 },
-  customers: { total: 0 },
-})
-
-// ========== 库存 ==========
+// 库存
 const invLoading = ref(false)
 const inventoryList = ref<any[]>([])
-const invPage = ref(1)
-const invPageSize = ref(20)
-const invTotal = ref(0)
 const invKeyword = ref('')
 const invGrade = ref('')
 const invStatus = ref('')
+const invPage = ref(1)
+const invPageSize = ref(20)
+const invTotal = ref(0)
 
+// 配货单
+const orderLoading = ref(false)
+const orderList = ref<any[]>([])
+const orderStatus = ref('')
+const orderPage = ref(1)
+const orderPageSize = ref(20)
+const orderTotal = ref(0)
+const selectedOrders = ref<any[]>([])
+
+// 库存对话框
 const showInvDialog = ref(false)
 const editingInvId = ref<number | null>(null)
 const invSubmitting = ref(false)
-const invForm = reactive({
+const invForm = reactive<any>({
   batchNo: '', grade: '', specification: '', weight: 0, pieceCount: 0,
-  location: '', nickelContent: null as number | null, inspectionDate: '',
-  certificateNo: '', remark: '',
+  location: '', nickelContent: null, inspectionDate: null, certificateNo: '', remark: ''
 })
+
+// 配货单对话框
+const showOrderDialog = ref(false)
+const orderSubmitting = ref(false)
+const orderForm = reactive<any>({ customerId: null, targetGrade: '', remark: '' })
+const availableStock = ref<any[]>([])
+const selectedStock = ref<any[]>([])
+
+// 订单详情
+const showOrderDetail = ref(false)
+const currentOrder = ref<any>(null)
+
+// 发货对话框
+const showShipDialog = ref(false)
+const shipSubmitting = ref(false)
+const shippingOrderId = ref<number | null>(null)
+const shipForm = reactive({ driverName: '', vehicleNo: '' })
+
+// 客户对话框
+const showCustomerDialog = ref(false)
+const showAddCustomerDialog = ref(false)
+const customerForm = reactive({ name: '', contact: '', phone: '', address: '' })
+
+// AI 识别
+const showRecognizing = ref(false)
+const recognizeProgress = ref(0)
+const recognizingDetail = ref('')
+const aiRecognizedData = ref<any[]>([])
+const selectedRecords = ref<any[]>([])
+const selectAll = ref(false)
+const aiPage = ref(1)
+const aiPageSize = ref(10)
+
+// ==================== 计算属性 ====================
+const paginatedData = computed(() => {
+  const start = (aiPage.value - 1) * aiPageSize.value
+  return aiRecognizedData.value.slice(start, start + aiPageSize.value)
+})
+
+const orderTotalWeight = computed(() =>
+  selectedStock.value.reduce((s, i) => s + Number(i.weight || 0), 0)
+)
+
+const orderTotalPieces = computed(() =>
+  selectedStock.value.reduce((s, i) => s + Number(i.pieceCount || 0), 0)
+)
+
+// ==================== 数据加载 ====================
+const loadStats = async () => {
+  try {
+    const res = await distApi.getStatistics()
+    stats.value = res
+  } catch {}
+}
 
 const loadInventory = async () => {
   invLoading.value = true
@@ -456,183 +545,6 @@ const loadInventory = async () => {
   }
 }
 
-const openAddInventory = () => {
-  editingInvId.value = null
-  Object.assign(invForm, { batchNo:'', grade:'', specification:'', weight:0, pieceCount:0, location:'', nickelContent:null, inspectionDate:'', certificateNo:'', remark:'' })
-  showInvDialog.value = true
-}
-
-const openEditInventory = (row: any) => {
-  editingInvId.value = row.id
-  Object.assign(invForm, {
-    batchNo: row.batchNo || '', grade: row.grade || '', specification: row.specification || '',
-    weight: Number(row.weight) || 0, pieceCount: row.pieceCount || 0, location: row.location || '',
-    nickelContent: row.nickelContent || null, inspectionDate: row.inspectionDate ? row.inspectionDate.split('T')[0] : '',
-    certificateNo: row.certificateNo || '', remark: row.remark || '',
-  })
-  showInvDialog.value = true
-}
-
-const submitInventory = async () => {
-  if (!invForm.batchNo || !invForm.grade) { ElMessage.warning('请填写批号和品级'); return }
-  invSubmitting.value = true
-  try {
-    if (editingInvId.value) {
-      await distApi.updateInventory(editingInvId.value, invForm)
-      ElMessage.success('更新成功')
-    } else {
-      await distApi.createInventory(invForm)
-      ElMessage.success('添加成功')
-    }
-    showInvDialog.value = false
-    loadInventory()
-    loadStats()
-  } catch (e: any) {
-    ElMessage.error('操作失败：' + (e.response?.data?.message || e.message))
-  } finally {
-    invSubmitting.value = false
-  }
-}
-
-const handleDeleteInventory = async (row: any) => {
-  try {
-    await distApi.deleteInventory(row.id)
-    ElMessage.success('删除成功')
-    loadInventory()
-    loadStats()
-  } catch (e: any) {
-    ElMessage.error('删除失败：' + (e.response?.data?.message || e.message))
-  }
-}
-
-// ========== AI 识别 ==========
-const aiRecognizedData = ref<any[]>([])
-const selectedRecords = ref<any[]>([])
-const selectAll = ref(false)
-const showRecognizing = ref(false)
-const recognizingDetail = ref('')
-const recognizeProgress = ref(0)
-const aiPage = ref(1)
-const aiPageSize = ref(20)
-
-const paginatedData = computed(() => {
-  const start = (aiPage.value - 1) * aiPageSize.value
-  return aiRecognizedData.value.slice(start, start + aiPageSize.value)
-})
-
-const beforeAIUpload = (file: any) => {
-  if (!file.type.startsWith('image/')) { ElMessage.error('只能上传图片文件！'); return false }
-  if (file.size / 1024 / 1024 > 10) { ElMessage.error('图片大小不能超过 10MB！'); return false }
-  showRecognizing.value = true
-  recognizeProgress.value = 0
-  recognizingDetail.value = '正在压缩图片...'
-  setTimeout(() => {
-    if (showRecognizing.value) { recognizeProgress.value = 40; recognizingDetail.value = '图片上传成功，正在调用 AI 识别...' }
-  }, 2000)
-  setTimeout(() => {
-    if (showRecognizing.value) { recognizeProgress.value = 70; recognizingDetail.value = 'AI 正在分析表格数据...' }
-  }, 5000)
-  return true
-}
-
-const handleCustomUpload = async ({ file }: any) => {
-  try {
-    // 压缩图片
-    let uploadFile: File = file
-    if (file.size > 2 * 1024 * 1024) {
-      const { blob } = await compressImage(file, { maxWidth: 1920, quality: 0.8 })
-      uploadFile = new File([blob], file.name, { type: 'image/jpeg' })
-    }
-    const result: any = await distApi.recognizeInventory(uploadFile)
-    showRecognizing.value = false
-    if (result.success) {
-      aiRecognizedData.value = result.data || []
-      ElMessage.success(result.message)
-    } else {
-      ElMessage.error(result.message || 'AI 识别失败')
-    }
-  } catch (e: any) {
-    showRecognizing.value = false
-    ElMessage.error('识别失败：' + (e.response?.data?.message || e.message))
-  }
-}
-
-const handleSelectAllChange = (checked: boolean) => {
-  selectedRecords.value = checked ? [...aiRecognizedData.value] : []
-}
-
-const quickAddRecord = async (index: number) => {
-  const record = aiRecognizedData.value[index]
-  if (!record) return
-  try {
-    await distApi.createInventory({
-      batchNo: record.batchNo || `B${record.packageNo}`,
-      grade: record.grade || 'Ni9996',
-      specification: record.grade || '99.96%',
-      weight: record.netWeight || 0,
-      pieceCount: record.pieceCount || 0,
-      sourceType: 'ai',
-    })
-    aiRecognizedData.value.splice(index, 1)
-    ElMessage.success('导入成功')
-    loadInventory()
-    loadStats()
-  } catch (e: any) {
-    ElMessage.error('导入失败：' + (e.response?.data?.message || e.message))
-  }
-}
-
-const batchImportAll = async () => {
-  if (!selectedRecords.value.length) return
-  try {
-    await ElMessageBox.confirm(`确认导入 ${selectedRecords.value.length} 条记录？`, '批量导入', { type: 'warning' })
-    const importData = selectedRecords.value.map(r => ({
-      batchNo: r.batchNo || `B${r.packageNo}`,
-      grade: r.grade || 'Ni9996',
-      specification: r.grade || '99.96%',
-      weight: r.netWeight || 0,
-      pieceCount: r.pieceCount || 0,
-      sourceType: 'ai',
-    }))
-    await distApi.batchCreateInventory(importData)
-    ElMessage.success(`成功导入 ${importData.length} 条`)
-    aiRecognizedData.value = []
-    selectedRecords.value = []
-    selectAll.value = false
-    loadInventory()
-    loadStats()
-  } catch {}
-}
-
-const removeAIRecord = (index: number) => {
-  aiRecognizedData.value.splice(index, 1)
-}
-
-// ========== 配货单 ==========
-const orderLoading = ref(false)
-const orderList = ref<any[]>([])
-const orderPage = ref(1)
-const orderPageSize = ref(20)
-const orderTotal = ref(0)
-const orderStatus = ref('')
-const selectedOrders = ref<any[]>([])
-
-const showOrderDialog = ref(false)
-const orderSubmitting = ref(false)
-const customers = ref<any[]>([])
-const availableStock = ref<any[]>([])
-const selectedStock = ref<any[]>([])
-const orderForm = reactive({ customerId: null as number | null, targetGrade: '', remark: '' })
-
-const showOrderDetail = ref(false)
-const currentOrder = ref<any>(null)
-const showShipDialog = ref(false)
-const shippingOrderId = ref<number | null>(null)
-const shipForm = reactive({ driverName: '', vehicleNo: '' })
-
-const orderTotalWeight = computed(() => selectedStock.value.reduce((s, i) => s + Number(i.weight || 0), 0))
-const orderTotalPieces = computed(() => selectedStock.value.reduce((s, i) => s + Number(i.pieceCount || 0), 0))
-
 const loadOrders = async () => {
   orderLoading.value = true
   try {
@@ -651,46 +563,192 @@ const loadOrders = async () => {
 
 const loadCustomers = async () => {
   try {
-    customers.value = await distApi.getCustomers()
+    const res = await distApi.getCustomers()
+    customers.value = res as any[]
   } catch {}
 }
 
-const loadAvailableStock = async () => {
+const refreshAll = async () => {
+  await Promise.all([loadStats(), loadInventory(), loadOrders(), loadCustomers()])
+  ElMessage.success('刷新完成')
+}
+
+// ==================== 库存操作 ====================
+const openAddInventory = () => {
+  editingInvId.value = null
+  Object.assign(invForm, {
+    batchNo: '', grade: '', specification: '', weight: 0, pieceCount: 0,
+    location: '', nickelContent: null, inspectionDate: null, certificateNo: '', remark: ''
+  })
+  aiRecognizedData.value = []
+  showInvDialog.value = true
+}
+
+const openEditInventory = (row: any) => {
+  editingInvId.value = row.id
+  Object.assign(invForm, { ...row })
+  showInvDialog.value = true
+}
+
+const submitInventory = async () => {
+  if (!invForm.batchNo || !invForm.grade) {
+    ElMessage.warning('请填写批号和品级')
+    return
+  }
+  invSubmitting.value = true
   try {
-    const res: any = await distApi.getInventory({ page: 1, limit: 100, status: 'available' })
+    if (editingInvId.value) {
+      await distApi.updateInventory(editingInvId.value, invForm)
+      ElMessage.success('更新成功')
+    } else {
+      await distApi.createInventory(invForm)
+      ElMessage.success('创建成功')
+    }
+    showInvDialog.value = false
+    loadInventory()
+    loadStats()
+  } catch (e: any) {
+    ElMessage.error('保存失败：' + (e.response?.data?.message || e.message))
+  } finally {
+    invSubmitting.value = false
+  }
+}
+
+const handleDeleteInventory = async (row: any) => {
+  try {
+    await distApi.deleteInventory(row.id)
+    ElMessage.success('删除成功')
+    loadInventory()
+    loadStats()
+  } catch (e: any) {
+    ElMessage.error('删除失败：' + (e.response?.data?.message || e.message))
+  }
+}
+
+// ==================== AI 识别 ====================
+const beforeAIUpload = (file: File) => {
+  if (!file.type.startsWith('image/')) {
+    ElMessage.error('只支持图片文件')
+    return false
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    ElMessage.error('图片大小不超过 10MB')
+    return false
+  }
+  return true
+}
+
+const handleCustomUpload = async ({ file }: any) => {
+  showRecognizing.value = true
+  recognizeProgress.value = 10
+  recognizingDetail.value = '正在上传图片...'
+
+  setTimeout(() => { recognizeProgress.value = 40; recognizingDetail.value = 'AI 正在识别中...' }, 500)
+
+  try {
+    const result = await distApi.recognizeInventory(file)
+    recognizeProgress.value = 90
+    recognizingDetail.value = '识别完成，正在解析...'
+
+    if (result.success) {
+      aiRecognizedData.value = result.data || []
+      ElMessage.success(`识别成功，共 ${result.count} 条记录`)
+    } else {
+      ElMessage.error('识别失败：' + (result.error || '未知错误'))
+    }
+  } catch (e: any) {
+    ElMessage.error('识别失败：' + (e.response?.data?.message || e.message))
+  } finally {
+    recognizeProgress.value = 100
+    setTimeout(() => { showRecognizing.value = false }, 500)
+  }
+}
+
+const handleSelectAllChange = (val: boolean) => {
+  selectedRecords.value = val ? [...paginatedData.value] : []
+}
+
+const batchImportAll = async () => {
+  if (!selectedRecords.value.length) return
+  try {
+    const importData = selectedRecords.value.map((r: any) => ({
+      batchNo: r.batchNo || `B${Date.now()}`,
+      grade: r.grade || 'Ni9996',
+      specification: `${r.grade || 'Ni9996'}`,
+      weight: r.netWeight || 0,
+      pieceCount: r.pieceCount || 0,
+      sourceType: 'ai',
+    }))
+    await distApi.batchCreateInventory(importData)
+    ElMessage.success(`成功导入 ${importData.length} 条记录`)
+    aiRecognizedData.value = aiRecognizedData.value.filter((_: any, i: number) => !selectedRecords.value.includes(paginatedData.value[i]))
+    selectedRecords.value = []
+    loadInventory()
+    loadStats()
+  } catch (e: any) {
+    ElMessage.error('导入失败：' + (e.response?.data?.message || e.message))
+  }
+}
+
+const quickAddRecord = (index: number) => {
+  const r = paginatedData.value[index]
+  if (!r) return
+  Object.assign(invForm, {
+    batchNo: r.batchNo || invForm.batchNo,
+    grade: r.grade || invForm.grade,
+    weight: r.netWeight || 0,
+    pieceCount: r.pieceCount || 0,
+    specification: r.grade || 'Ni9996',
+  })
+}
+
+const removeAIRecord = (index: number) => {
+  const globalIndex = (aiPage.value - 1) * aiPageSize.value + index
+  aiRecognizedData.value.splice(globalIndex, 1)
+}
+
+// ==================== 配货单操作 ====================
+const openCreateOrder = async () => {
+  await loadCustomers()
+  // 加载可用库存
+  try {
+    const res: any = await distApi.getInventory({ limit: 100, status: 'available' })
     availableStock.value = res.data || []
   } catch {}
-}
-
-const openCreateOrder = async () => {
   Object.assign(orderForm, { customerId: null, targetGrade: '', remark: '' })
   selectedStock.value = []
-  await loadCustomers()
-  await loadAvailableStock()
   showOrderDialog.value = true
 }
 
 const onCustomerChange = () => {
-  const c = customers.value.find((c: any) => c.id === orderForm.customerId)
-  if (c) orderForm.remark = c.phone || ''
+  const c = customers.value.find(x => x.id === orderForm.customerId)
+  if (c) orderForm.customerName = c.name
 }
 
 const submitOrder = async () => {
-  if (!orderForm.customerId) { ElMessage.warning('请选择客户'); return }
-  if (selectedStock.value.length === 0) { ElMessage.warning('请选择库存'); return }
+  if (!orderForm.customerId) {
+    ElMessage.warning('请选择客户')
+    return
+  }
+  if (!selectedStock.value.length) {
+    ElMessage.warning('请选择库存')
+    return
+  }
   orderSubmitting.value = true
   try {
-    const customer = customers.value.find((c: any) => c.id === orderForm.customerId)
+    const items = selectedStock.value.map(s => ({
+      stockId: s.id,
+      weight: Number(s.weight),
+      pieceCount: Number(s.pieceCount),
+    }))
     await distApi.createOrder({
       customerId: orderForm.customerId,
-      customerName: customer?.name || '',
-      targetGrade: orderForm.targetGrade || null,
-      remark: orderForm.remark || null,
-      items: selectedStock.value.map((s: any) => ({
-        stockId: s.id, weight: Number(s.weight), pieceCount: s.pieceCount,
-      })),
+      customerName: orderForm.customerName,
+      targetGrade: orderForm.targetGrade,
+      remark: orderForm.remark,
+      items,
     })
-    ElMessage.success('配货单创建成功')
+    ElMessage.success('创建成功')
     showOrderDialog.value = false
     loadOrders()
     loadStats()
@@ -703,22 +761,22 @@ const submitOrder = async () => {
 
 const viewOrder = async (row: any) => {
   try {
-    currentOrder.value = await distApi.getOrderById(row.id)
+    const res = await distApi.getOrderById(row.id)
+    currentOrder.value = res
     showOrderDetail.value = true
   } catch (e: any) {
-    ElMessage.error('加载详情失败')
+    ElMessage.error('加载失败：' + (e.response?.data?.message || e.message))
   }
 }
 
 const confirmOrder = async (row: any) => {
   try {
+    await ElMessageBox.confirm('确认此配货单？', '确认', { type: 'warning' })
     await distApi.confirmOrder(row.id)
     ElMessage.success('已确认')
     loadOrders()
     loadStats()
-  } catch (e: any) {
-    ElMessage.error('操作失败')
-  }
+  } catch {}
 }
 
 const shipOrder = (row: any) => {
@@ -729,20 +787,24 @@ const shipOrder = (row: any) => {
 }
 
 const confirmShip = async () => {
+  if (!shippingOrderId.value) return
+  shipSubmitting.value = true
   try {
-    await distApi.shipOrder(shippingOrderId.value!, shipForm)
+    await distApi.shipOrder(shippingOrderId.value, shipForm)
     ElMessage.success('已发货')
     showShipDialog.value = false
     loadOrders()
     loadStats()
   } catch (e: any) {
-    ElMessage.error('操作失败')
+    ElMessage.error('发货失败：' + (e.response?.data?.message || e.message))
+  } finally {
+    shipSubmitting.value = false
   }
 }
 
 const deliverOrder = async (row: any) => {
   try {
-    await ElMessageBox.confirm('确认已送达？', '提示', { type: 'info' })
+    await ElMessageBox.confirm('确认已送达？', '送达', { type: 'warning' })
     await distApi.deliverOrder(row.id)
     ElMessage.success('已送达')
     loadOrders()
@@ -752,7 +814,7 @@ const deliverOrder = async (row: any) => {
 
 const cancelOrder = async (row: any) => {
   try {
-    await ElMessageBox.confirm('确定取消该配货单？', '提示', { type: 'warning' })
+    await ElMessageBox.confirm('取消此配货单？已锁定的库存将释放。', '取消', { type: 'warning' })
     await distApi.cancelOrder(row.id)
     ElMessage.success('已取消')
     loadOrders()
@@ -767,44 +829,71 @@ const deleteOrder = async (row: any) => {
     loadOrders()
     loadStats()
   } catch (e: any) {
-    ElMessage.error('删除失败')
+    ElMessage.error('删除失败：' + (e.response?.data?.message || e.message))
   }
 }
 
 const batchDeleteOrders = async () => {
   if (!selectedOrders.value.length) return
   try {
-    await ElMessageBox.confirm(`确定删除 ${selectedOrders.value.length} 条配货单？`, '批量删除', { type: 'warning' })
-    const ids = selectedOrders.value.map((o: any) => o.id)
+    await ElMessageBox.confirm(`确定删除 ${selectedOrders.value.length} 个配货单？`, '批量删除', { type: 'warning' })
+    const ids = selectedOrders.value.map(r => r.id)
     await distApi.batchDeleteOrders(ids)
-    ElMessage.success(`已删除 ${ids.length} 条`)
+    ElMessage.success(`已删除 ${ids.length} 个`)
     selectedOrders.value = []
     loadOrders()
     loadStats()
   } catch {}
 }
 
-// ========== 统计 ==========
-const loadStats = async () => {
-  try {
-    const res: any = await distApi.getStatistics()
-    if (res.inventory) stats.inventory = res.inventory
-    if (res.orders) stats.orders = res.orders
-    if (res.customers) stats.customers = res.customers
-  } catch {}
+// ==================== 客户操作 ====================
+const openAddCustomer = () => {
+  Object.assign(customerForm, { name: '', contact: '', phone: '', address: '' })
+  showAddCustomerDialog.value = true
 }
 
-// ========== 工具 ==========
-const fmtDate = (d: string) => d ? new Date(d).toLocaleString('zh-CN') : '-'
+const submitCustomer = async () => {
+  if (!customerForm.name) {
+    ElMessage.warning('请填写客户名称')
+    return
+  }
+  try {
+    await distApi.createCustomer(customerForm)
+    ElMessage.success('添加成功')
+    showAddCustomerDialog.value = false
+    loadCustomers()
+  } catch (e: any) {
+    ElMessage.error('添加失败：' + (e.response?.data?.message || e.message))
+  }
+}
+
+const deleteCustomer = async (row: any) => {
+  try {
+    await distApi.deleteCustomer(row.id)
+    ElMessage.success('删除成功')
+    loadCustomers()
+  } catch (e: any) {
+    ElMessage.error('删除失败：' + (e.response?.data?.message || e.message))
+  }
+}
+
+// ==================== 工具函数 ====================
 const getGradeType = (g: string) => ({ Ni9996:'success', Ni9990:'primary', Ni9980:'warning', Ni9950:'info' }[g] || 'info')
 const getStatusType = (s: string) => ({ available:'success', reserved:'warning', shipped:'info' }[s] || 'info')
 const getStatusLabel = (s: string) => ({ available:'可用', reserved:'已锁定', shipped:'已发货' }[s] || s)
-const getOrderStatusType = (s: string) => ({ draft:'info', confirmed:'warning', shipping:'primary', shipped:'success', cancelled:'danger' }[s] || 'info')
+const getOrderStatusType = (s: string) => ({ draft:'info', confirmed:'primary', shipping:'warning', shipped:'success', cancelled:'danger' }[s] || 'info')
 const getOrderStatusLabel = (s: string) => ({ draft:'草稿', confirmed:'已确认', shipping:'运输中', shipped:'已发货', cancelled:'已取消' }[s] || s)
+const fmtDate = (d: string) => d ? new Date(d).toLocaleString('zh-CN') : '-'
 
-const refreshAll = () => { loadInventory(); loadOrders(); loadStats(); ElMessage.success('刷新成功') }
+// ==================== 初始化 ====================
+onMounted(() => {
+  refreshAll()
+})
 
-onMounted(() => { loadInventory(); loadOrders(); loadStats() })
+watch(activeTab, () => {
+  if (activeTab.value === 'inventory') loadInventory()
+  if (activeTab.value === 'orders') loadOrders()
+})
 </script>
 
 <style scoped>
@@ -812,24 +901,25 @@ onMounted(() => { loadInventory(); loadOrders(); loadStats() })
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 .page-title { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 600; color: #1e293b; }
 .header-actions { display: flex; gap: 8px; }
+
 .stats-row { margin-bottom: 24px; }
-.stat-card { display: flex; align-items: center; gap: 16px; padding: 20px; background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.stat-card { display: flex; align-items: center; gap: 16px; padding: 20px; background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
 .stat-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
-.stat-info { flex: 1; }
+.stat-info { display: flex; flex-direction: column; }
 .stat-value { font-size: 24px; font-weight: 700; color: #1e293b; }
-.stat-label { font-size: 13px; color: #64748b; margin-top: 4px; }
+.stat-label { font-size: 13px; color: #94a3b8; margin-top: 2px; }
+
+.toolbar { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
 .main-card { border-radius: 12px; }
-.toolbar { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
 .pagination { display: flex; justify-content: flex-end; margin-top: 16px; }
-.ai-recognize-section { margin-bottom: 8px; }
-.upload-text { font-size: 14px; color: #606266; margin-top: 8px; }
-.upload-text em { color: #409eff; font-style: normal; }
-.upload-tip { color: #909399; font-size: 12px; margin-top: 4px; }
+
+.ai-recognize-section { margin-bottom: 16px; }
+.upload-text { margin: 12px 0 4px; font-size: 14px; color: #606266; }
+.upload-tip { font-size: 12px; color: #909399; margin-top: 8px; }
 .ai-preview { margin-top: 16px; }
-.preview-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.ai-pagination { display: flex; justify-content: center; margin-top: 12px; }
-.recognizing-toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #fff; border-radius: 12px; padding: 20px 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 2000; min-width: 300px; }
-.toast-content { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; color: #303133; font-size: 14px; }
-.fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+.preview-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.recognizing-toast { position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.8); color: #fff; padding: 16px 24px; border-radius: 12px; z-index: 9999; min-width: 260px; text-align: center; }
+.toast-content { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+
+.order-summary { padding: 12px 0; }
 </style>

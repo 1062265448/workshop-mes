@@ -422,9 +422,35 @@ model AiRecognitionHistory {
   @@index([createdAt(sort: Desc)])
 }
 
-// ==================== 平面库配货模块 ====================
+// ==================== 平面库配货 ====================
 
-// 客户表
+model DistributionOrder {
+  id             Int      @id @default(autoincrement())
+  orderNo        String   @unique @map("order_no") @db.VarChar(50)
+  customerId     Int      @map("customer_id")
+  customerName   String?  @map("customer_name") @db.VarChar(100)  // 冗余字段，快速显示
+  productSpec    String?  @map("product_spec") @db.VarChar(100)   // 产品规格
+  targetGrade    String?  @map("target_grade") @db.VarChar(20)    // 目标品级
+  totalWeight    Decimal? @map("total_weight") @db.Decimal(10, 3) // 总重量
+  totalPieces    Int?     @map("total_pieces")                     // 总片数
+  status         String   @default("draft") @db.VarChar(20)       // draft/confirmed/shipping/shipped/cancelled
+  shippedAt      DateTime? @map("shipped_at")
+  driverName     String?  @map("driver_name") @db.VarChar(50)     // 司机
+  vehicleNo      String?  @map("vehicle_no") @db.VarChar(20)      // 车牌号
+  remark         String?  @db.Text
+  deletedAt      DateTime? @map("deleted_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  customer       Customer                @relation(fields: [customerId], references: [id])
+  items          DistributionOrderItem[]
+
+  @@map("distribution_order")
+  @@index([orderNo])
+  @@index([status])
+  @@index([customerId])
+}
+
 model Customer {
   id          Int      @id @default(autoincrement())
   name        String   @db.VarChar(100)
@@ -467,34 +493,6 @@ model InventoryStock {
   @@index([batchNo])
   @@index([grade])
   @@index([status])
-}
-
-// 配货单表
-model DistributionOrder {
-  id             Int      @id @default(autoincrement())
-  orderNo        String   @unique @map("order_no") @db.VarChar(50)
-  customerId     Int      @map("customer_id")
-  customerName   String?  @map("customer_name") @db.VarChar(100)  // 冗余字段，快速显示
-  productSpec    String?  @map("product_spec") @db.VarChar(100)   // 产品规格
-  targetGrade    String?  @map("target_grade") @db.VarChar(20)    // 目标品级
-  totalWeight    Decimal? @map("total_weight") @db.Decimal(10, 3) // 总重量
-  totalPieces    Int?     @map("total_pieces")                     // 总片数
-  status         String   @default("draft") @db.VarChar(20)       // draft/confirmed/shipping/shipped/cancelled
-  shippedAt      DateTime? @map("shipped_at")
-  driverName     String?  @map("driver_name") @db.VarChar(50)     // 司机
-  vehicleNo      String?  @map("vehicle_no") @db.VarChar(20)      // 车牌号
-  remark         String?  @db.Text
-  deletedAt      DateTime? @map("deleted_at")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-
-  customer       Customer                @relation(fields: [customerId], references: [id])
-  items          DistributionOrderItem[]
-
-  @@map("distribution_order")
-  @@index([orderNo])
-  @@index([status])
-  @@index([customerId])
 }
 
 // 配货单明细表

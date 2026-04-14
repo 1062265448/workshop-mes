@@ -42,7 +42,8 @@ export const recognizeInventory = (file: File) => {
   const formData = new FormData()
   formData.append('image', file)
   return api.post('/distribution/inventory/ai-recognize', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    headers: { 'Content-Type': undefined },
+    timeout: 120000, // 2分钟超时，AI 识别可能需要较长时间
   })
 }
 
@@ -82,6 +83,9 @@ export const getOrders = (params?: {
 export const getOrderById = (id: number) => {
   return api.get(`/distribution/orders/${id}`)
 }
+
+// 向后兼容别名
+export const getOrderDetail = getOrderById
 
 export const createOrder = (data: any) => {
   return api.post('/distribution/orders', data)
