@@ -406,41 +406,112 @@ model DefectAnnotation {
 }
 
 model AiRecognitionHistory {
-  id          Int      @id @default(autoincrement())
-  imageUrl    String
-  result      String   @db.Text
-  itemCount   Int
-  status      String   @default("success")
-  errorMessage String? @db.Text
-  createdAt   DateTime @default(now())
+  id           Int      @id @default(autoincrement())
+  imageUrl     String   @map("image_url") @db.VarChar(200)
+  result       String   @db.Text
+  itemCount    Int      @map("item_count")
+  status       String   @default("success") @db.VarChar(20)
+  errorMessage String?  @map("error_message") @db.VarChar(500)
+  batchNo      String?  @map("batch_no") @db.VarChar(50)
+  grade        String?  @db.VarChar(20)
+  date         DateTime? @db.Date
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("ai_recognition_history")
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
 }
 
-// ==================== 平面库配货 ====================
+// ==================== 平面库配货模块 ====================
+
+// 客户表
 model Customer {
   id          Int      @id @default(autoincrement())
-  name        String
-  contact     String?
-  phone       String?
-  address     String?
+  name        String   @db.VarChar(100)
+  contact     String?  @db.VarChar(50)
+  phone       String?  @db.VarChar(20)
+  address     String?  @db.VarChar(200)
   deletedAt   DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   orders DistributionOrder[]
+
+  @@map("distribution_customer")
+  @@index([name])
 }
 
-model DistributionOrder {
-  id          Int      @id @default(autoincrement())
-  orderNo     String   @unique
-  customerId  Int
-  items       String   @db.Text
-  status      String   @default("pending")
-  shippedAt   DateTime?
-  deletedAt   DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// 库存批次表（平面库可用库存）
+model InventoryStock {
+  id               Int      @id @default(autoincrement())
+  batchNo          String   @map("batch_no") @db.VarChar(50)     // 批号
+  grade            String   @db.VarChar(20)                       // 品级 Ni9996/Ni9990...
+  specification    String?  @db.VarChar(50)                       // 规格
+  weight           Decimal  @default(0) @db.Decimal(10, 3)        // 重量 kg
+  pieceCount       Int      @default(0) @map("piece_count")       // 片数
+  location         String?  @db.VarChar(100)                      // 存放位置
+  nickelContent    Decimal? @map("nickel_content") @db.Decimal(5, 2)  // 镍含量 %
+  impurityContent  String?  @map("impurity_content") @db.VarChar(100) // 杂质含量
+  status           String   @default("available") @db.VarChar(20)  // available/reserved/shipped
+  inspectionDate   DateTime? @map("inspection_date") @db.Date      // 检测日期
+  certificateNo    String?  @map("certificate_no") @db.VarChar(50) // 质量证明书编号
+  remark           String?  @db.Text
+  sourceType       String?  @map("source_type") @db.VarChar(20)    // ai/manual/import
+  sourceImage      String?  @map("source_image") @db.VarChar(200)  // AI识别源图片URL
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
-  customer Customer @relation(fields: [customerId], references: [id])
+  orderItems       DistributionOrderItem[]
+
+  @@map("inventory_stock")
+  @@index([batchNo])
+  @@index([grade])
+  @@index([status])
+}
+
+// 配货单表
+model DistributionOrder {
+  id             Int      @id @default(autoincrement())
+  orderNo        String   @unique @map("order_no") @db.VarChar(50)
+  customerId     Int      @map("customer_id")
+  customerName   String?  @map("customer_name") @db.VarChar(100)  // 冗余字段，快速显示
+  productSpec    String?  @map("product_spec") @db.VarChar(100)   // 产品规格
+  targetGrade    String?  @map("target_grade") @db.VarChar(20)    // 目标品级
+  totalWeight    Decimal? @map("total_weight") @db.Decimal(10, 3) // 总重量
+  totalPieces    Int?     @map("total_pieces")                     // 总片数
+  status         String   @default("draft") @db.VarChar(20)       // draft/confirmed/shipping/shipped/cancelled
+  shippedAt      DateTime? @map("shipped_at")
+  driverName     String?  @map("driver_name") @db.VarChar(50)     // 司机
+  vehicleNo      String?  @map("vehicle_no") @db.VarChar(20)      // 车牌号
+  remark         String?  @db.Text
+  deletedAt      DateTime? @map("deleted_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  customer       Customer                @relation(fields: [customerId], references: [id])
+  items          DistributionOrderItem[]
+
+  @@map("distribution_order")
+  @@index([orderNo])
+  @@index([status])
+  @@index([customerId])
+}
+
+// 配货单明细表
+model DistributionOrderItem {
+  id          Int      @id @default(autoincrement())
+  orderId     Int      @map("order_id")
+  stockId     Int      @map("stock_id")
+  weight      Decimal  @default(0) @db.Decimal(10, 3)           // 配货重量
+  pieceCount  Int      @default(0) @map("piece_count")           // 配货片数
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  order       DistributionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  stock       InventoryStock    @relation(fields: [stockId], references: [id])
+
+  @@map("distribution_order_item")
+  @@index([orderId])
+  @@index([stockId])
 }
 
 // ==================== 审计日志 ====================

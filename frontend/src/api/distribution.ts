@@ -1,121 +1,134 @@
 import api from './index'
 
-// 导出 api 实例供历史记录页面使用
-export { api }
+// ==================== 统计 ====================
+
+export const getStatistics = () => {
+  return api.get('/distribution/statistics')
+}
 
 // ==================== 库存管理 ====================
 
-/**
- * 获取库存列表
- */
-export const getInventory = (params?: { page?: number; limit?: number; keyword?: string }) => {
+export const getInventory = (params?: {
+  page?: number
+  limit?: number
+  keyword?: string
+  grade?: string
+  status?: string
+}) => {
   return api.get('/distribution/inventory', { params })
 }
 
-/**
- * 创建库存
- */
+export const getInventoryById = (id: number) => {
+  return api.get(`/distribution/inventory/${id}`)
+}
+
 export const createInventory = (data: any) => {
   return api.post('/distribution/inventory', data)
 }
 
-/**
- * 批量创建库存
- */
 export const batchCreateInventory = (data: any[]) => {
   return api.post('/distribution/inventory/batch', data)
 }
 
-/**
- * 删除库存
- */
-export const deleteInventory = (id: number) => {
-  return api.delete(`/distribution/inventory/${id}`)
-}
-
-/**
- * 更新库存
- */
 export const updateInventory = (id: number, data: any) => {
   return api.patch(`/distribution/inventory/${id}`, data)
 }
 
-/**
- * AI 识别库存图片
- */
+export const deleteInventory = (id: number) => {
+  return api.delete(`/distribution/inventory/${id}`)
+}
+
 export const recognizeInventory = (file: File) => {
   const formData = new FormData()
   formData.append('image', file)
   return api.post('/distribution/inventory/ai-recognize', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
+    headers: { 'Content-Type': 'multipart/form-data' },
   })
 }
 
 // ==================== 客户管理 ====================
 
-/**
- * 获取客户列表
- */
 export const getCustomers = () => {
   return api.get('/distribution/customers')
 }
 
-/**
- * 创建客户
- */
+export const getCustomerById = (id: number) => {
+  return api.get(`/distribution/customers/${id}`)
+}
+
 export const createCustomer = (data: any) => {
   return api.post('/distribution/customers', data)
 }
 
+export const updateCustomer = (id: number, data: any) => {
+  return api.put(`/distribution/customers/${id}`, data)
+}
+
+export const deleteCustomer = (id: number) => {
+  return api.delete(`/distribution/customers/${id}`)
+}
+
 // ==================== 配货单管理 ====================
 
-/**
- * 获取配货单列表
- */
-export const getOrders = (params?: { page?: number; limit?: number }) => {
+export const getOrders = (params?: {
+  page?: number
+  limit?: number
+  status?: string
+  customerId?: number
+}) => {
   return api.get('/distribution/orders', { params })
 }
 
-/**
- * 获取配货单详情
- */
-export const getOrderDetail = (id: number) => {
-  return api.get(`/distribution/order/${id}`)
+export const getOrderById = (id: number) => {
+  return api.get(`/distribution/orders/${id}`)
 }
 
-/**
- * 创建配货单
- */
 export const createOrder = (data: any) => {
-  return api.post('/distribution/order', data)
+  return api.post('/distribution/orders', data)
 }
 
-/**
- * 删除配货单
- */
-export const deleteOrder = (id: number) => {
-  return api.delete(`/distribution/order/${id}`)
-}
-
-/**
- * 确认配货单
- */
-export const confirmOrder = (id: number) => {
-  return api.post(`/distribution/order/${id}/confirm`)
-}
-
-/**
- * 发货配货单
- */
-export const shipOrder = (id: number, data: { driverName?: string; vehicleNo?: string }) => {
-  return api.post(`/distribution/order/${id}/ship`, data)
-}
-
-/**
- * 更新配货单
- */
 export const updateOrder = (id: number, data: any) => {
-  return api.patch(`/distribution/order/${id}`, data)
+  return api.put(`/distribution/orders/${id}`, data)
+}
+
+export const deleteOrder = (id: number) => {
+  return api.delete(`/distribution/orders/${id}`)
+}
+
+export const batchDeleteOrders = (ids: number[]) => {
+  return api.post('/distribution/orders/batch-delete', { ids })
+}
+
+export const confirmOrder = (id: number) => {
+  return api.post(`/distribution/orders/${id}/confirm`)
+}
+
+export const shipOrder = (id: number, data?: { driverName?: string; vehicleNo?: string }) => {
+  return api.post(`/distribution/orders/${id}/ship`, data)
+}
+
+export const deliverOrder = (id: number) => {
+  return api.post(`/distribution/orders/${id}/deliver`)
+}
+
+export const cancelOrder = (id: number) => {
+  return api.post(`/distribution/orders/${id}/cancel`)
+}
+
+// ==================== AI 识别历史 ====================
+
+export const getRecognitionHistory = (params?: {
+  page?: number
+  limit?: number
+  status?: string
+}) => {
+  return api.get('/distribution/recognition-history', { params })
+}
+
+export const deleteRecognitionHistory = (id: number) => {
+  return api.delete(`/distribution/recognition-history/${id}`)
+}
+
+export const batchDeleteRecognitionHistory = (ids: number[]) => {
+  return api.post('/distribution/recognition-history/batch-delete', { ids })
 }
