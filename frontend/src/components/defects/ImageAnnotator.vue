@@ -562,6 +562,14 @@ const getCursorStyle = () => {
   return 'default'
 }
 
+// 选择标注（点击列表项）
+const onAnnotationSelect = (annotation: any) => {
+  const index = annotations.indexOf(annotation)
+  if (index !== -1) {
+    editAnnotation(index)
+  }
+}
+
 // 获取 Canvas 坐标（屏幕 → Canvas 像素）
 // getBoundingClientRect() 返回的是 CSS transform 后的视觉尺寸
 // (e.clientX - rect.left) 已经是相对于缩放后 rect 的偏移
