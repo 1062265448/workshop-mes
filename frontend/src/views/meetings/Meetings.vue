@@ -282,6 +282,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Calendar,
@@ -292,6 +293,8 @@ import {
   Search,
 } from '@element-plus/icons-vue'
 import * as meetingsApi from '@/api/meetings'
+
+const router = useRouter()
 
 // 状态
 const loading = ref(false)
@@ -393,8 +396,7 @@ const submitMeeting = async () => {
 
 // 查看会议
 const viewMeeting = (row: any) => {
-  // TODO: 跳转到详情页
-  ElMessage.info('详情页开发中...')
+  router.push({ name: 'MeetingDetail', params: { id: row.id } })
 }
 
 // 编辑会议
@@ -450,14 +452,14 @@ const formatTime = (date: string) => {
   })
 }
 
-const getTypeTag = (type: string) => {
+const getTypeTag = (type: string): any => {
   const map: any = {
-    general: '',
+    general: undefined,
     weekly: 'success',
     review: 'warning',
     emergency: 'danger',
   }
-  return map[type] || ''
+  return map[type] || undefined
 }
 
 const getTypeLabel = (type: string) => {
@@ -470,14 +472,14 @@ const getTypeLabel = (type: string) => {
   return map[type] || type
 }
 
-const getStatusTag = (status: string) => {
+const getStatusTag = (status: string): any => {
   const map: any = {
-    scheduled: '',
+    scheduled: undefined,
     ongoing: 'warning',
     completed: 'success',
     cancelled: 'info',
   }
-  return map[status] || ''
+  return map[status] || undefined
 }
 
 const getStatusLabel = (status: string) => {

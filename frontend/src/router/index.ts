@@ -25,6 +25,12 @@ const routes = [
         meta: { title: '会议管理' },
       },
       {
+        path: 'meetings/:id',
+        name: 'MeetingDetail',
+        component: () => import('@/views/meetings/MeetingDetail.vue'),
+        meta: { title: '会议详情' },
+      },
+      {
         path: 'safety',
         name: 'Safety',
         component: () => import('@/views/Placeholder.vue'),

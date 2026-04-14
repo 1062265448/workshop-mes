@@ -10,7 +10,12 @@ import {
   ParseIntPipe,
   Logger,
   BadRequestException,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
 import { MeetingsService } from './meetings.service';
 import { CreateMeetingDto, UpdateMeetingDto, CreateMeetingTaskDto, AddParticipantDto, UpdateParticipantStatusDto } from './dto/create-meeting.dto';
 
@@ -125,6 +130,37 @@ export class MeetingsController {
   }
 
   // ==================== 会议附件管理 ====================
+
+  @Post(':id/attachments/upload')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './tmp/uploads',
+        filename: (req, file, cb) => {
+          const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1E9)}${extname(file.originalname)}`;
+          cb(null, uniqueName);
+        },
+      }),
+      limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+      fileFilter: (req, file, cb) => {
+        // 允许的文件类型
+        const allowedExts = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+          '.jpg', '.jpeg', '.png', '.gif', '.zip', '.rar', '.txt', '.csv'];
+        const ext = extname(file.originalname).toLowerCase();
+        if (allowedExts.includes(ext)) {
+          cb(null, true);
+        } else {
+          cb(new BadRequestException(`不支持的文件类型: ${ext}`), false);
+        }
+      },
+    }),
+  )
+  async uploadAttachment(
+    @Param('id', new ParseIntPipe()) id: number,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.meetingsService.uploadAttachment(id, file);
+  }
 
   @Post(':id/attachments')
   async addAttachment(

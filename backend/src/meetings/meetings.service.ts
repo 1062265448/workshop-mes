@@ -1,6 +1,8 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMeetingDto, UpdateMeetingDto, CreateMeetingTaskDto } from './dto/create-meeting.dto';
+import { join } from 'path';
+import { existsSync, mkdirSync } from 'fs';
 
 @Injectable()
 export class MeetingsService {
@@ -213,6 +215,52 @@ export class MeetingsService {
   }
 
   // ==================== 会议附件管理 ====================
+
+  /**
+   * 上传附件文件
+   */
+  async uploadAttachment(meetingId: number, file: Express.Multer.File) {
+    // 验证会议存在
+    const meeting = await this.prisma.meeting.findUnique({ where: { id: meetingId } });
+    if (!meeting) {
+      throw new NotFoundException(`会议 ID ${meetingId} 不存在`);
+    }
+
+    // 确保 uploads/meetings 目录存在
+    const uploadDir = join(__dirname, '..', '..', 'uploads', 'meetings');
+    if (!existsSync(uploadDir)) {
+      mkdirSync(uploadDir, { recursive: true });
+    }
+
+    // 保存文件
+    const timestamp = Date.now();
+    const ext = file.originalname.split('.').pop() || '';
+    const fileName = `${meetingId}_${timestamp}.${ext}`;
+    const filePath = join(uploadDir, fileName);
+
+    // 写入文件（Express 已将文件写入临时目录，需要移动）
+    const { rename } = await import('fs/promises');
+    try {
+      await rename(file.path, filePath);
+    } catch {
+      // 如果 rename 失败，可能文件已在同一分区
+      const { copyFile } = await import('fs/promises');
+      await copyFile(file.path, filePath);
+      const { unlink } = await import('fs');
+      unlink(file.path, () => {});
+    }
+
+    // 创建附件记录
+    return this.prisma.meetingAttachment.create({
+      data: {
+        meetingId,
+        name: file.originalname,
+        url: `/uploads/meetings/${fileName}`,
+        size: file.size,
+        type: file.mimetype,
+      },
+    });
+  }
 
   async addAttachment(meetingId: number, name: string, url: string, size?: number, type?: string) {
     return this.prisma.meetingAttachment.create({

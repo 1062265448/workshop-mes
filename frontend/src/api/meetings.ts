@@ -104,7 +104,23 @@ export const getTasksByMeeting = (meetingId: number) => {
 // ==================== 会议附件管理 ====================
 
 /**
- * 添加附件
+ * 上传附件文件
+ */
+export const uploadAttachment = (
+  meetingId: number,
+  file: File,
+  onProgress?: (progressEvent: any) => void
+) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return api.post(`${API_BASE}/${meetingId}/attachments/upload`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: onProgress,
+  })
+}
+
+/**
+ * 添加附件（URL 方式）
  */
 export const addAttachment = (
   meetingId: number,
