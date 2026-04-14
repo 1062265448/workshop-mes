@@ -265,15 +265,15 @@ const loadSavedAnnotations = async () => {
   try {
     const sample: any = await defectsApi.getDefectSampleById(props.sampleId)
     if (sample && sample.annotations && sample.annotations.length > 0) {
-      // 清空现有标注，替换为已保存的标注
       annotations.splice(0, annotations.length)
       
       sample.annotations.forEach((anno: any) => {
+        // 存储是百分比 (0-1)，需转为像素坐标
         annotations.push({
-          x: Number(anno.x),
-          y: Number(anno.y),
-          width: Number(anno.width),
-          height: Number(anno.height),
+          x: Number(anno.x) * (originalImageWidth.value || 1),
+          y: Number(anno.y) * (originalImageHeight.value || 1),
+          width: Number(anno.width) * (originalImageWidth.value || 1),
+          height: Number(anno.height) * (originalImageHeight.value || 1),
           defectTypeId: anno.defectTypeId,
         })
       })
@@ -689,19 +689,10 @@ const onMouseUp = () => {
   }
 }
 
-// 获取缺陷类型颜色（统一使用固定的颜色配置）
+// 获取缺陷类型颜色（直接使用 type.color，不再硬编码）
 const getDefectTypeColor = (defectTypeId: number) => {
   const type = defectTypes.value.find(t => t.id === defectTypeId)
-  if (!type) return '#ff0000'
-  
-  // 统一的颜色配置（蓝色/橙色/粉色）
-  const colorMap: any = {
-    '不锈钢专用镍 (3#)': '#3b82f6',        // 蓝色
-    '不锈钢专用镍 (绿色结晶)': '#f97316',  // 橙色
-    '不锈钢专用镍 (氢氧化镍)': '#ec4899',  // 粉色
-  }
-  
-  return colorMap[type.name] || type.color || '#ff0000'
+  return type?.color || '#ff0000'
 }
 
 // 获取文字颜色（与 getDefectTypeColor 相同）
