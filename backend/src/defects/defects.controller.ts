@@ -38,6 +38,11 @@ export class DefectsController {
 
   // ==================== 缺陷类型管理 ====================
 
+  @Get('statistics')
+  async getStatistics() {
+    return this.defectsService.getStatistics();
+  }
+
   @Get('types')
   async getDefectTypes() {
     return this.defectsService.getDefectTypes();

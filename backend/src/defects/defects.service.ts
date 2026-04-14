@@ -12,13 +12,15 @@ export class DefectsService {
 
   async getDefectTypes() {
     return this.prisma.defectType.findMany({
+      where: { deletedAt: null },
       orderBy: { createdAt: 'desc' },
       include: {
         _count: {
-          select: { samples: true, annotations: true }
+          select: { samples: { where: { deletedAt: null } }, annotations: true }
         },
         samples: {
-          take: 6,  // 返回前 6 个样本的缩略图
+          where: { deletedAt: null },
+          take: 6,
           select: {
             id: true,
             imageUrl: true,
@@ -35,18 +37,19 @@ export class DefectsService {
       where: { id },
       include: {
         samples: {
+          where: { deletedAt: null },
           orderBy: { createdAt: 'desc' },
           include: {
             annotations: true
           }
         },
         _count: {
-          select: { samples: true, annotations: true }
+          select: { samples: { where: { deletedAt: null } }, annotations: true }
         }
       }
     });
 
-    if (!defectType) {
+    if (!defectType || defectType.deletedAt) {
       throw new NotFoundException(`缺陷类型 ID ${id} 不存在`);
     }
 
@@ -84,12 +87,14 @@ export class DefectsService {
       where: { id },
     });
 
-    if (!defectType) {
+    if (!defectType || defectType.deletedAt) {
       throw new NotFoundException(`缺陷类型 ID ${id} 不存在`);
     }
 
-    return this.prisma.defectType.delete({
+    // 软删除：设置 deletedAt
+    return this.prisma.defectType.update({
       where: { id },
+      data: { deletedAt: new Date() },
     });
   }
 
@@ -99,7 +104,10 @@ export class DefectsService {
     try {
       const { defectTypeId, page = 1, limit = 20 } = params || {};
 
-      const where: any = defectTypeId ? { defectTypeId } : {};
+      const where: any = {
+        deletedAt: null,
+        ...(defectTypeId ? { defectTypeId } : {}),
+      };
 
       const skip = (page - 1) * limit;
 
@@ -158,7 +166,7 @@ export class DefectsService {
       },
     });
 
-    if (!sample) {
+    if (!sample || sample.deletedAt) {
       throw new NotFoundException(`样本 ID ${id} 不存在`);
     }
 
@@ -213,25 +221,18 @@ export class DefectsService {
   }
 
   async deleteDefectSample(id: number) {
-    this.logger.log(`🗑️ 删除样本 ID: ${id}`);
+    this.logger.log(`🗑️ 软删除样本 ID: ${id}`);
     
-    try {
-      // 先删除关联的标注
-      await this.prisma.defectAnnotation.deleteMany({
-        where: { sampleId: id },
-      });
-      
-      // 再删除样本
-      const sample = await this.prisma.defectSample.delete({
-        where: { id },
-      });
-      
-      this.logger.log(`✅ 样本删除成功`);
-      return sample;
-    } catch (error: any) {
-      this.logger.error(`❌ 删除样本失败:`, error.message);
-      throw error;
+    const sample = await this.prisma.defectSample.findUnique({ where: { id } });
+    if (!sample || sample.deletedAt) {
+      throw new NotFoundException(`样本 ID ${id} 不存在`);
     }
+    
+    // 软删除：设置 deletedAt
+    return this.prisma.defectSample.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 
   // ==================== 缺陷标注管理 ====================
@@ -313,6 +314,31 @@ export class DefectsService {
 
     this.logger.log(`✅ 批量保存完成：${result.count} 个标注`);
     return result;
+  }
+
+  // ==================== 统计 ====================
+
+  async getStatistics() {
+    const [typeCount, sampleCount, annotationCount, todaySampleCount] = await Promise.all([
+      this.prisma.defectType.count({ where: { deletedAt: null } }),
+      this.prisma.defectSample.count({ where: { deletedAt: null } }),
+      this.prisma.defectAnnotation.count(),
+      this.prisma.defectSample.count({
+        where: {
+          deletedAt: null,
+          createdAt: {
+            gte: new Date(new Date().setHours(0, 0, 0, 0)),
+          },
+        },
+      }),
+    ]);
+
+    return {
+      defectTypes: typeCount,
+      samples: sampleCount,
+      annotations: annotationCount,
+      todaySamples: todaySampleCount,
+    };
   }
 
   // ==================== 样本库导入 ====================
