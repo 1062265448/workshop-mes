@@ -400,6 +400,7 @@ const onAnnotationsChange = (count: number) => {
 }
 
 // 保存标注（单请求：事务保证原子性）
+const handleSaveAnnotations = async (annotations: any[]) => {
   try {
     // 获取图片实际尺寸用于坐标转换
     const imgElement = document.createElement('img')
