@@ -210,6 +210,7 @@ import {
   UploadFilled,
   Picture,
   Search,
+  Loading,
 } from '@element-plus/icons-vue'
 import ImageAnnotator from '@/components/defects/ImageAnnotator.vue'
 import * as defectsApi from '@/api/defects'
