@@ -209,11 +209,10 @@ export class DefectsController {
   @Post('samples/:id/annotations/batch')
   async batchSaveAnnotations(
     @Param('id', new ParseIntPipe()) id: number,
-    @Body('defectTypeId', new ParseIntPipe()) defectTypeId: number,
-    @Body() dto: BatchSaveAnnotationsDto,
+    @Body() body: { defectTypeId: number; annotations: any[] },
   ) {
-    this.logger.log(`📦 批量保存标注：样本 ID=${id}, ${dto.annotations?.length || 0} 个标注`);
-    return this.defectsService.batchSaveAnnotations(id, defectTypeId, dto.annotations);
+    this.logger.log(`📦 批量保存标注：样本 ID=${id}, 缺陷类型 ID=${body.defectTypeId}, ${body.annotations?.length || 0} 个标注`);
+    return this.defectsService.batchSaveAnnotations(id, body.defectTypeId, body.annotations);
   }
 
   @Get('samples/:id/annotations')
