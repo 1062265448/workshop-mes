@@ -562,24 +562,24 @@ const getCursorStyle = () => {
   return 'default'
 }
 
-// 选择标注（点击列表项）
-const onAnnotationSelect = (annotation: any) => {
-  const index = annotations.indexOf(annotation)
-  if (index !== -1) {
-    editAnnotation(index)
-  }
+// 获取 Canvas 坐标（屏幕 → Canvas 像素）
+// getBoundingClientRect() 返回的是 CSS transform 后的视觉尺寸
+// (e.clientX - rect.left) 已经是相对于缩放后 rect 的偏移
+// 需要除以 zoom 回到 Canvas 原始坐标系
+const getCanvasCoords = (e: MouseEvent) => {
+  const canvas = canvasRef.value!
+  const rect = canvas.getBoundingClientRect()
+  const z = typeof zoomLevel.value === 'number' && zoomLevel.value > 0 ? zoomLevel.value : 1
+  const x = (e.clientX - rect.left) / z
+  const y = (e.clientY - rect.top) / z
+  return { x, y }
 }
 
 // 鼠标按下
 const onMouseDown = (e: MouseEvent) => {
   if (!canvasRef.value) return
 
-  const rect = canvasRef.value.getBoundingClientRect()
-  const scaleX = canvasRef.value.width / rect.width
-  const scaleY = canvasRef.value.height / rect.height
-
-  const x = (e.clientX - rect.left) * scaleX
-  const y = (e.clientY - rect.top) * scaleY
+  const { x, y } = getCanvasCoords(e)
 
   // 中键或平移模式 → 平移图片
   if (e.button === 1 || isPanning.value) {
@@ -644,7 +644,6 @@ const getResizeHandle = (x: number, y: number, rect: any): string => {
 const onMouseMove = (e: MouseEvent) => {
   if (!canvasRef.value) return
 
-  // 平移中
   if (isPanningActive.value) {
     const dx = e.clientX - panStart.value.x
     const dy = e.clientY - panStart.value.y
@@ -655,11 +654,9 @@ const onMouseMove = (e: MouseEvent) => {
   }
 
   const rect = canvasRef.value.getBoundingClientRect()
-  const scaleX = canvasRef.value.width / rect.width
-  const scaleY = canvasRef.value.height / rect.height
-
-  const currentX = (e.clientX - rect.left) * scaleX
-  const currentY = (e.clientY - rect.top) * scaleY
+  const z = typeof zoomLevel.value === 'number' && zoomLevel.value > 0 ? zoomLevel.value : 1
+  const currentX = (e.clientX - rect.left) / z
+  const currentY = (e.clientY - rect.top) / z
 
   if (isDragging.value && editingIndex.value !== null) {
     const dx = currentX - dragStart.value.x
@@ -1019,8 +1016,6 @@ watch(() => props.imageUrl, () => {
 
 .annotation-image {
   display: block;
-  max-width: 100%;
-  height: auto;
 }
 
 .annotation-image.loading {
@@ -1031,8 +1026,6 @@ watch(() => props.imageUrl, () => {
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
 }
 
 .loading-overlay {
