@@ -104,10 +104,19 @@ export class CreateDefectSampleDto {
 }
 
 export class UploadDefectImageDto {
-  @IsNumber()
-  defectTypeId: number;
+  @IsString()
+  @IsNotEmpty({ message: '请选择缺陷类型' })
+  defectTypeId: string; // FormData 传递的是字符串
 
   @IsString()
   @IsOptional()
   description?: string;
+}
+
+/** 批量保存标注（一次性替换样本全部标注） */
+export class BatchSaveAnnotationsDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DefectAnnotationDto)
+  annotations: DefectAnnotationDto[];
 }

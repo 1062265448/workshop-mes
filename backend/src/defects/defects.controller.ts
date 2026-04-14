@@ -15,13 +15,14 @@ import {
   HttpStatus,
   HttpException,
   InternalServerErrorException,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import { mkdirSync, existsSync } from 'fs';
 import { DefectsService } from './defects.service';
-import { CreateDefectTypeDto, UpdateDefectTypeDto, CreateDefectSampleDto } from './dto/create-defect.dto';
+import { CreateDefectTypeDto, UpdateDefectTypeDto, CreateDefectSampleDto, UploadDefectImageDto, BatchSaveAnnotationsDto } from './dto/create-defect.dto';
 
 @Controller('defects')
 export class DefectsController {
@@ -63,6 +64,13 @@ export class DefectsController {
 
   @Delete('types/:id')
   async deleteDefectType(@Param('id', new ParseIntPipe()) id: number) {
+    // 检查是否有关联样本/标注
+    const defectType = await this.defectsService.getDefectTypeById(id);
+    if (defectType._count?.samples > 0 || defectType._count?.annotations > 0) {
+      throw new BadRequestException(
+        `无法删除：该类型关联了 ${defectType._count?.samples} 个样本和 ${defectType._count?.annotations} 个标注，请先删除关联数据`
+      );
+    }
     return this.defectsService.deleteDefectType(id);
   }
 
@@ -155,43 +163,34 @@ export class DefectsController {
   )
   async uploadDefectImage(
     @UploadedFile() file: any,
-    @Body('defectTypeId') defectTypeIdStr?: string,
-    @Body('description') description?: string,
+    @Body() dto: UploadDefectImageDto,
   ) {
-    try {
-      this.logger.log(`📷 上传缺陷图片：${file.originalname}`);
-      this.logger.log(`缺陷类型 ID 字符串：${defectTypeIdStr}`);
+    this.logger.log(`📷 上传缺陷图片：${file.originalname}`);
 
-      const defectTypeId = defectTypeIdStr ? parseInt(defectTypeIdStr) : null;
-      
-      if (!defectTypeId) {
-        this.logger.warn('缺少缺陷类型 ID');
-        throw new Error('请先选择缺陷类型');
-      }
-      
-      this.logger.log(`缺陷类型 ID: ${defectTypeId}`);
+    const defectTypeId = parseInt(dto.defectTypeId);
+    if (isNaN(defectTypeId)) {
+      throw new BadRequestException('缺陷类型 ID 无效');
+    }
 
-      const imageUrl = `/uploads/defects/${file.filename}`;
+    const imageUrl = `/uploads/defects/${file.filename}`;
 
-      // 创建样本记录
-      const sample = await this.defectsService.createDefectSample({
-        defectTypeId,
-        imageUrl,
-        description,
-      });
+    // 创建样本记录
+    const sample = await this.defectsService.createDefectSample({
+      defectTypeId,
+      imageUrl,
+      description: dto.description,
+    });
 
-      return {
-        success: true,
-        message: '图片上传成功',
+    return {
+      success: true,
+      message: '图片上传成功',
+      data: {
         imageUrl,
         filename: file.originalname,
         size: file.size,
         sample,
-      };
-    } catch (error: any) {
-      this.logger.error(`❌ 上传失败：${error.message}`);
-      throw error;
-    }
+      },
+    };
   }
 
   // ==================== 缺陷标注 ====================
@@ -204,6 +203,17 @@ export class DefectsController {
   ) {
     this.logger.log(`🎯 创建缺陷标注：样本 ID=${id}, 缺陷类型 ID=${defectTypeId}`);
     return this.defectsService.createAnnotation(id, defectTypeId, annotation);
+  }
+
+  /** 批量保存标注（一次性替换全部） */
+  @Post('samples/:id/annotations/batch')
+  async batchSaveAnnotations(
+    @Param('id', new ParseIntPipe()) id: number,
+    @Body('defectTypeId', new ParseIntPipe()) defectTypeId: number,
+    @Body() dto: BatchSaveAnnotationsDto,
+  ) {
+    this.logger.log(`📦 批量保存标注：样本 ID=${id}, ${dto.annotations?.length || 0} 个标注`);
+    return this.defectsService.batchSaveAnnotations(id, defectTypeId, dto.annotations);
   }
 
   @Get('samples/:id/annotations')

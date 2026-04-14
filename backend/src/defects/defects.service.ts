@@ -1,6 +1,6 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateDefectTypeDto, UpdateDefectTypeDto, CreateDefectSampleDto } from './dto/create-defect.dto';
+import { CreateDefectTypeDto, UpdateDefectTypeDto, CreateDefectSampleDto, DefectAnnotationDto } from './dto/create-defect.dto';
 
 @Injectable()
 export class DefectsService {
@@ -264,6 +264,55 @@ export class DefectsService {
     return this.prisma.defectAnnotation.delete({
       where: { id },
     });
+  }
+
+  // ==================== 批量保存标注 ====================
+
+  /**
+   * 批量保存标注（一次性替换样本全部标注）
+   * 使用事务保证原子性：先删除旧标注 → 再批量创建新标注
+   */
+  async batchSaveAnnotations(
+    sampleId: number,
+    defectTypeId: number,
+    annotations: DefectAnnotationDto[],
+  ) {
+    this.logger.log(`📦 批量保存：样本 ${sampleId}, ${annotations?.length || 0} 个标注`);
+
+    // 验证样本存在
+    const sample = await this.prisma.defectSample.findUnique({ where: { id: sampleId } });
+    if (!sample) {
+      throw new NotFoundException(`样本 ID ${sampleId} 不存在`);
+    }
+
+    // 事务：删除旧标注 + 批量创建新标注
+    const result = await this.prisma.$transaction(async (tx) => {
+      // 删除旧标注
+      await tx.defectAnnotation.deleteMany({
+        where: { sampleId },
+      });
+
+      // 批量创建
+      if (annotations && annotations.length > 0) {
+        await tx.defectAnnotation.createMany({
+          data: annotations.map(anno => ({
+            sampleId,
+            defectTypeId,
+            x: anno.x,
+            y: anno.y,
+            width: anno.width,
+            height: anno.height,
+            confidence: anno.confidence,
+            description: anno.description,
+          })),
+        });
+      }
+
+      return { sampleId, count: annotations?.length || 0 };
+    });
+
+    this.logger.log(`✅ 批量保存完成：${result.count} 个标注`);
+    return result;
   }
 
   // ==================== 样本库导入 ====================
