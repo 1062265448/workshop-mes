@@ -93,17 +93,23 @@ export const deleteDefectSample = (id: number) => {
  */
 export const uploadDefectImage = (file: File, defectTypeId: number, description?: string) => {
   const formData = new FormData()
-  formData.append('image', file)  // 必须与后端 FileInterceptor('image') 一致
+  formData.append('image', file)
   if (defectTypeId) {
     formData.append('defectTypeId', defectTypeId.toString())
   }
   if (description) {
     formData.append('description', description)
   }
-  return api.post('/defects/samples/upload', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
+  return api.post('/defects/samples/upload', formData)
+}
+
+/**
+ * 批量保存标注（一次性替换样本全部标注，事务保证原子性）
+ */
+export const saveAnnotations = (sampleId: number, defectTypeId: number, annotations: any[]) => {
+  return api.post(`/defects/samples/${sampleId}/annotations/batch`, {
+    defectTypeId,
+    annotations,
   })
 }
 

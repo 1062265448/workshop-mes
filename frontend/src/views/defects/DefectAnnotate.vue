@@ -371,7 +371,7 @@ const confirmSampleSelection = () => {
   ElMessage.success('已选择样本')
 }
 
-// 保存标注
+// 保存标注（单请求：事务保证原子性）
 const handleSaveAnnotations = async (annotations: any[]) => {
   try {
     // 获取图片实际尺寸用于坐标转换
@@ -403,33 +403,12 @@ const handleSaveAnnotations = async (annotations: any[]) => {
       }
       await defectsApi.createDefectSample(sampleData)
     } else {
-      // 更新现有样本的标注
-      const sample: any = await defectsApi.getDefectSampleById(sampleId.value)
-      
-      // 删除所有旧标注
-      if (sample.annotations && sample.annotations.length > 0) {
-        const deletePromises = sample.annotations.map((anno: any) => 
-          defectsApi.deleteAnnotation(anno.id)
-        )
-        await Promise.all(deletePromises)
-      }
-      
-      // 创建新标注（并行执行）
-      if (normalizeAnnotations && normalizeAnnotations.length > 0) {
-        const createPromises = normalizeAnnotations.map(anno => 
-          defectsApi.createAnnotation(
-            sampleId.value!,
-            anno.defectTypeId,
-            {
-              x: anno.x,
-              y: anno.y,
-              width: anno.width,
-              height: anno.height,
-            }
-          )
-        )
-        await Promise.all(createPromises)
-      }
+      // 单请求批量替换全部标注（后端事务：删除旧 + 创建新）
+      await defectsApi.saveAnnotations(
+        sampleId.value!,
+        defectTypeId.value!,
+        normalizeAnnotations,
+      )
     }
 
     ElMessage.success('标注保存成功')
