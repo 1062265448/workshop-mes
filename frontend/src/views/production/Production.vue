@@ -686,12 +686,14 @@ const formatDate = (date) => {
 // 加载基础数据（带缓存）
 const loadWorkshops = async () => {
   try {
-    // 使用缓存，避免重复请求
-    const res = await productionApi.getWorkshops()
+    // API interceptor 已返回 response.data
+    const data = await productionApi.getWorkshops()
+    if (!Array.isArray(data)) {
+      console.warn('车间数据格式异常:', data)
+      return
+    }
     // 去重处理
-    const data = res.data || res
     const uniqueData = Array.from(new Map(data.map(item => [item.id, item])).values())
-    // 直接赋值，不使用 push 避免重复
     workshops.value = uniqueData
     console.log('✅ 车间数据已加载:', uniqueData.length, '条')
   } catch (error) {
@@ -701,12 +703,13 @@ const loadWorkshops = async () => {
 
 const loadProducts = async () => {
   try {
-    // 使用缓存，避免重复请求
-    const res = await productionApi.getProducts()
+    const data = await productionApi.getProducts()
+    if (!Array.isArray(data)) {
+      console.warn('产品数据格式异常:', data)
+      return
+    }
     // 去重处理
-    const data = res.data || res
     const uniqueData = Array.from(new Map(data.map(item => [item.id, item])).values())
-    // 直接赋值，不使用 push 避免重复
     products.value = uniqueData
     console.log('✅ 产品数据已加载:', uniqueData.length, '条')
   } catch (error) {
