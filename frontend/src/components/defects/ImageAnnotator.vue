@@ -81,13 +81,13 @@
       </div>
     </div>
 
-    <!-- 图片 + 标注覆盖层 -->
+    <!-- 画布区域 -->
     <div class="canvas-container" ref="canvasContainer" @wheel="handleWheel">
       <div 
         class="canvas-wrapper" 
         :style="{
           transform: `scale(${zoomLevel}) translate(${panX}px, ${panY}px)`,
-          transformOrigin: 'top left'
+          transformOrigin: 'center center'
         }"
       >
         <!-- 图片 -->
@@ -98,45 +98,21 @@
           :class="{ 'loading': !imageLoaded }"
           @load="onImageLoad"
           @error="onImageError"
-          @mousedown="onImageMouseDown"
         />
 
-        <!-- 标注框覆盖层 (div) -->
-        <div class="annotation-overlay">
-          <div
-            v-for="(anno, index) in annotations"
-            :key="index"
-            class="annotation-box"
-            :class="{ 
-              'selected': editingIndex === index,
-              'drawing': drawingIndex === index 
-            }"
-            :style="getAnnotationStyle(anno)"
-          >
-            <!-- 标签 -->
-            <div class="annotation-label" :style="{ background: getDefectTypeColor(anno.defectTypeId) }">
-              {{ getDefectTypeName(anno.defectTypeId) }}
-            </div>
-            <!-- 删除按钮 (hover 显示) -->
-            <button 
-              class="annotation-delete-btn"
-              @click.stop="deleteAnnotation(index)"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-
-        <!-- 绘制中的临时框 -->
-        <div
-          v-if="isDrawing && drawStart"
-          class="annotation-box drawing"
-          :style="getDrawRectStyle()"
-        >
-          <div class="annotation-label" :style="{ background: getDefectTypeColor(selectedDefectType) }">
-            {{ getDefectTypeName(selectedDefectType) || '待选择' }}
-          </div>
-        </div>
+        <!-- Canvas 层 -->
+        <canvas
+          ref="canvasRef"
+          class="annotation-canvas"
+          :style="{
+            cursor: getCursorStyle()
+          }"
+          @mousedown="onMouseDown"
+          @mousemove="onMouseMove"
+          @mouseup="onMouseUp"
+          @mouseleave="onMouseLeave"
+          @contextmenu.prevent
+        ></canvas>
 
         <!-- 加载提示 -->
         <div v-if="!imageLoaded" class="loading-overlay">
@@ -222,19 +198,47 @@
           <template #default="{ row }">
             <el-tag 
               :color="getDefectTypeColor(row.defectTypeId)" 
-              :style="{ color: getTextColor(getDefectTypeColor(row.defectTypeId)) }"
+              size="small"
+              style="background: #fff; color: #333;"
             >
-              {{ getDefectTypeName(row.defectTypeId) || '未知' }}
+              {{ getDefectTypeName(row.defectTypeId) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="x" label="X" width="70" />
-        <el-table-column prop="y" label="Y" width="70" />
-        <el-table-column prop="width" label="宽" width="70" />
-        <el-table-column prop="height" label="高" width="70" />
-        <el-table-column label="操作" width="60">
-          <template #default="{ $index }">
-            <el-button link type="danger" size="small" @click="deleteAnnotation($index)">删除</el-button>
+        <el-table-column label="位置" width="140">
+          <template #default="{ row }">
+            <span class="mono-text">
+              ({{ Math.round(row.x) }}, {{ Math.round(row.y) }})
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="尺寸" width="120">
+          <template #default="{ row }">
+            <span class="mono-text">
+              {{ Math.round(row.width) }} × {{ Math.round(row.height) }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="150" fixed="right">
+          <template #default="{ row, $index }">
+            <el-button 
+              link 
+              type="primary" 
+              size="small" 
+              @click="editAnnotation($index)"
+            >
+              <el-icon><Edit /></el-icon>
+              编辑
+            </el-button>
+            <el-button 
+              link 
+              type="danger" 
+              size="small" 
+              @click="deleteAnnotation($index)"
+            >
+              <el-icon><Delete /></el-icon>
+              删除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -243,399 +247,722 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Plus, Check, Refresh, RefreshLeft, RefreshRight, Loading, Rank } from '@element-plus/icons-vue'
+import { ref, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { 
+  Plus, Refresh, Check, Loading, Edit, Delete, 
+  RefreshLeft, RefreshRight, Rank
+} from '@element-plus/icons-vue'
+import * as defectsApi from '@/api/defects'
 
-// ============== Props & Emits ==============
-interface Props {
-  imageUrl: string
-  defectTypes: any[]
+// Props
+const props = defineProps<{
+  imageUrl?: string
   sampleId?: number
   defectTypeId?: number
-  initialAnnotations?: any[]
-}
-
-const props = withDefaults(defineProps<Props>(), {
-  sampleId: undefined,
-  defectTypeId: undefined,
-  initialAnnotations: () => []
-})
-
-const emit = defineEmits<{
-  (e: 'save', annotations: any[]): void
-  (e: 'change', annotations: any[]): void
 }>()
 
-// ============== State ==============
-const imageRef = ref<HTMLImageElement | null>(null)
-const canvasContainer = ref<HTMLElement | null>(null)
+// Emits
+const emit = defineEmits<{
+  (e: 'save', annotations: any[]): void
+  (e: 'change', count: number): void  // 标注数量变化时触发
+  (e: 'close'): void
+}>()
+
+// 加载已保存的标注
+const loadSavedAnnotations = async () => {
+  if (!props.sampleId) return
+  
+  try {
+    const sample: any = await defectsApi.getDefectSampleById(props.sampleId)
+    if (sample && sample.annotations && sample.annotations.length > 0) {
+      annotations.splice(0, annotations.length)
+      
+      sample.annotations.forEach((anno: any) => {
+        // 存储是百分比 (0-1)，需转为像素坐标
+        annotations.push({
+          x: Number(anno.x) * (originalImageWidth.value || 1),
+          y: Number(anno.y) * (originalImageHeight.value || 1),
+          width: Number(anno.width) * (originalImageWidth.value || 1),
+          height: Number(anno.height) * (originalImageHeight.value || 1),
+          defectTypeId: anno.defectTypeId,
+        })
+      })
+      // 重新绘制
+      setTimeout(() => {
+        drawAllAnnotations()
+      }, 100)
+    }
+  } catch (error: any) {
+    console.error('加载标注失败:', error)
+  }
+}
+
+// 状态
 const imageLoaded = ref(false)
+const imageRef = ref<HTMLImageElement | null>(null)
+const canvasRef = ref<HTMLCanvasElement | null>(null)
+const canvasContainer = ref<HTMLElement | null>(null)
 const saving = ref(false)
 const hasShownShortcutTip = ref(false)
 
-// 标注数据
-interface Annotation {
-  x: number
-  y: number
-  width: number
-  height: number
-  defectTypeId: number
-}
-
-const annotations = reactive<Annotation[]>([])
+// 缺陷类型
+const defectTypes = ref<any[]>([])
 const selectedDefectType = ref<number | null>(null)
+
+// 标注数据
+const annotations = reactive<any[]>([])
+
+// 撤销/重做历史
+const history = ref<any[][]>([[]])
+const historyIndex = ref(0)
+const maxHistoryLength = 50
 
 // 绘制状态
 const isDrawing = ref(false)
-const isPanning = ref(false)
-const isPanningActive = ref(false)
-const drawStart = ref<{ x: number; y: number } | null>(null)
-const drawingIndex = ref<number | null>(null)
-const editingIndex = ref<number | null>(null)
+const currentRect = ref<any>(null)
+const startX = ref(0)
+const startY = ref(0)
 
-// 平移
-const panX = ref(0)
-const panY = ref(0)
-const panStart = ref<{ x: number; y: number } | null>(null)
+// 编辑状态
+const editingIndex = ref<number | null>(null)
+const isDragging = ref(false)
+const isResizing = ref(false)
+const dragStart = ref({ x: 0, y: 0 })
+const resizeHandle = ref<string>('')
 
 // 缩放
-const zoomLevel = ref<string | number>('fit')
+const zoomLevel = ref<number | 'fit'>(1)
+const originalImageWidth = ref(0)
+const originalImageHeight = ref(0)
 
-// 历史记录
-const history = ref<any[][]>([])
-const historyIndex = ref(0)
+// 平移状态
+const isPanning = ref(false)
+const isPanningActive = ref(false) // 实际拖拽中
+const panX = ref(0)
+const panY = ref(0)
+const panStart = ref({ x: 0, y: 0 })
 
-// ============== 图片加载 ==============
+// 加载缺陷类型
+const loadDefectTypes = async () => {
+  try {
+    const res: any = await defectsApi.getDefectTypes()
+    defectTypes.value = res || []
+    if (defectTypes.value.length > 0 && !selectedDefectType.value) {
+      selectedDefectType.value = defectTypes.value[0].id
+    }
+    if (props.defectTypeId) {
+      selectedDefectType.value = props.defectTypeId
+    }
+  } catch (error: any) {
+    console.error('加载缺陷类型失败:', error)
+  }
+}
+
+// 图片加载完成
 const onImageLoad = () => {
   imageLoaded.value = true
-  if (props.initialAnnotations && props.initialAnnotations.length > 0) {
-    annotations.splice(0, annotations.length, ...props.initialAnnotations.map(a => ({ ...a })))
-    saveHistory()
-  }
-  if (zoomLevel.value === 'fit') {
-    nextTick(() => fitToScreen())
-  }
+  originalImageWidth.value = imageRef.value?.naturalWidth || 0
+  originalImageHeight.value = imageRef.value?.naturalHeight || 0
+  nextTick(() => {
+    initCanvas()
+    fitToScreen()
+  })
 }
 
+// 图片加载失败
 const onImageError = () => {
-  ElMessage.error('图片加载失败')
+  imageLoaded.value = false
+  ElMessage.error('图片加载失败，请检查图片链接是否有效')
 }
 
-// ============== 适应屏幕 ==============
-const fitToScreen = () => {
-  if (!canvasContainer.value || !imageRef.value) return
-  const container = canvasContainer.value.getBoundingClientRect()
+// 初始化 Canvas
+const initCanvas = () => {
+  if (!imageRef.value || !canvasRef.value) return
+
   const img = imageRef.value
-  const scaleX = container.width / img.naturalWidth
-  const scaleY = container.height / img.naturalHeight
-  zoomLevel.value = Math.min(scaleX, scaleY, 1)
-  panX.value = 0
-  panY.value = 0
+  const canvas = canvasRef.value
+  const ctx = canvas.getContext('2d')
+  
+  if (!ctx) return
+
+  canvas.width = img.naturalWidth
+  canvas.height = img.naturalHeight
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  drawAllAnnotations()
 }
 
-// ============== 缩放 ==============
+// 适应屏幕
+const fitToScreen = () => {
+  if (!canvasContainer.value || !canvasRef.value) return
+  
+  const containerRect = canvasContainer.value.getBoundingClientRect()
+  const imgWidth = originalImageWidth.value
+  const imgHeight = originalImageHeight.value
+  
+  const scaleX = (containerRect.width - 48) / imgWidth
+  const scaleY = (containerRect.height - 48) / imgHeight
+  const scale = Math.min(scaleX, scaleY, 1)
+  
+  zoomLevel.value = scale < 0.5 ? 0.5 : scale > 2 ? 2 : scale
+  applyZoom()
+}
+
+// 应用缩放
 const applyZoom = () => {
+  if (!canvasRef.value) return
+  
   if (zoomLevel.value === 'fit') {
     fitToScreen()
+    return
   }
-  panX.value = 0
-  panY.value = 0
+  
+  const canvas = canvasRef.value
+  canvas.style.transform = `scale(${zoomLevel.value})`
+  canvas.style.transformOrigin = 'center center'
 }
 
+// 滚轮缩放
 const handleWheel = (e: WheelEvent) => {
-  if (e.ctrlKey || e.metaKey) {
-    e.preventDefault()
-    const delta = e.deltaY > 0 ? -0.1 : 0.1
-    const newZoom = Math.max(0.1, Math.min(5, (Number(zoomLevel.value) || 1) + delta))
-    zoomLevel.value = newZoom
+  if (!e.ctrlKey) return
+  e.preventDefault()
+  
+  const delta = e.deltaY > 0 ? -0.1 : 0.1
+  const newZoom = typeof zoomLevel.value === 'number' 
+    ? Math.max(0.5, Math.min(3, zoomLevel.value + delta)) 
+    : 1
+  
+  zoomLevel.value = Math.round(newZoom * 100) / 100
+  applyZoom()
+}
+
+// 绘制所有标注
+const drawAllAnnotations = () => {
+  if (!canvasRef.value) return
+  
+  const canvas = canvasRef.value
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+  annotations.forEach((anno, index) => {
+    drawRectangle(ctx, anno, index === editingIndex.value)
+  })
+
+  if (currentRect.value) {
+    drawRectangle(ctx, currentRect.value, true)
   }
 }
 
-// ============== 平移 ==============
+// 绘制单个矩形（根据缩放级别调整线宽和字体大小）
+const drawRectangle = (ctx: CanvasRenderingContext2D, rect: any, isActive: boolean = false) => {
+  const color = getDefectTypeColor(rect.defectTypeId) || '#ff0000'
+  const z = typeof zoomLevel.value === 'number' ? zoomLevel.value : 1
+  // 反向缩放：zoom 越大线越细，保持视觉一致
+  const inv = 1 / z
+  
+  ctx.strokeStyle = color
+  ctx.lineWidth = (isActive ? 4 : 2) * inv
+  ctx.fillStyle = color + '33'
+
+  ctx.beginPath()
+  ctx.rect(rect.x, rect.y, rect.width, rect.height)
+  ctx.fill()
+  ctx.stroke()
+
+  if (rect.defectTypeId) {
+    const name = getDefectTypeName(rect.defectTypeId)
+    const fontSize = Math.round(24 * inv)
+    ctx.font = `bold ${fontSize}px Arial`
+    ctx.fillStyle = '#fff'
+    ctx.strokeStyle = '#000'
+    ctx.lineWidth = 4 * inv
+    const labelY = Math.round(12 * inv)
+    ctx.strokeText(name, rect.x, rect.y - labelY)
+    ctx.fillText(name, rect.x, rect.y - labelY)
+  }
+
+  if (isActive) {
+    drawResizeHandles(ctx, rect, color, inv)
+  }
+}
+
+// 绘制调整大小的控制点
+const drawResizeHandles = (ctx: CanvasRenderingContext2D, rect: any, color: string, inv: number = 1) => {
+  const handles = [
+    { x: rect.x, y: rect.y, name: 'nw' },
+    { x: rect.x + rect.width, y: rect.y, name: 'ne' },
+    { x: rect.x, y: rect.y + rect.height, name: 'sw' },
+    { x: rect.x + rect.width, y: rect.y + rect.height, name: 'se' },
+  ]
+
+  const size = Math.round(10 * inv)
+  const half = Math.round(5 * inv)
+
+  ctx.fillStyle = '#fff'
+  ctx.strokeStyle = color
+  ctx.lineWidth = 2 * inv
+
+  handles.forEach(handle => {
+    ctx.beginPath()
+    ctx.rect(handle.x - half, handle.y - half, size, size)
+    ctx.fill()
+    ctx.stroke()
+  })
+}
+
+// 切换平移模式
 const togglePanMode = () => {
   isPanning.value = !isPanning.value
-  if (isPanning.value) isDrawing.value = false
-}
-
-const onImageMouseDown = (e: MouseEvent) => {
-  if (isPanning.value || e.button === 1) {
-    isPanningActive.value = true
-    panStart.value = { x: e.clientX, y: e.clientY }
-    e.preventDefault()
+  if (isPanning.value) {
+    isDrawing.value = false
+    editingIndex.value = null
+    currentRect.value = null
+    ElMessage.info('平移模式：在画布上拖拽移动图片')
   }
 }
 
-// ============== 绘制标注框 ==============
+// 切换绘制模式
 const toggleDrawingMode = () => {
+  if (!selectedDefectType.value) {
+    ElMessage.warning('请先选择缺陷类型')
+    return
+  }
   isDrawing.value = !isDrawing.value
-  if (isDrawing.value) {
-    isPanning.value = false
-    if (!selectedDefectType.value && props.defectTypes.length > 0) {
-      selectedDefectType.value = props.defectTypes[0].id
-    }
-  }
-}
-
-const getImageCoords = (e: MouseEvent): { x: number; y: number } => {
-  if (!imageRef.value) return { x: 0, y: 0 }
-  const rect = imageRef.value.getBoundingClientRect()
-  const z = typeof zoomLevel.value === 'number' && zoomLevel.value > 0 ? zoomLevel.value : 1
-  return {
-    x: (e.clientX - rect.left) / z,
-    y: (e.clientY - rect.top) / z
-  }
-}
-
-const handleCanvasMouseDown = (e: MouseEvent) => {
-  if (e.button !== 0) return
-  if (isPanningActive.value) return
+  editingIndex.value = null
+  currentRect.value = null
   
   if (isDrawing.value) {
-    const coords = getImageCoords(e)
-    drawStart.value = { x: coords.x, y: coords.y }
-    drawingIndex.value = annotations.length
+    ElMessage.info('绘制模式：在图片上拖拽绘制标注框')
+  } else {
+    ElMessage.info('已取消绘制模式')
   }
 }
 
-const handleCanvasMouseMove = (e: MouseEvent) => {
-  if (isPanningActive.value && panStart.value) {
-    panX.value += (e.clientX - panStart.value.x) / (typeof zoomLevel.value === 'number' ? zoomLevel.value : 1)
-    panY.value += (e.clientY - panStart.value.y) / (typeof zoomLevel.value === 'number' ? zoomLevel.value : 1)
-    panStart.value = { x: e.clientX, y: e.clientY }
+// 开始绘制
+const startDrawing = () => {
+  if (!selectedDefectType.value) {
+    ElMessage.warning('请先选择缺陷类型')
     return
   }
+  isDrawing.value = true
+  editingIndex.value = null
 }
 
-const handleCanvasMouseUp = (e: MouseEvent) => {
-  if (isPanningActive.value) {
-    isPanningActive.value = false
-    panStart.value = null
-    return
-  }
-  
-  if (isDrawing.value && drawStart.value) {
-    const coords = getImageCoords(e)
-    const x = Math.min(drawStart.value.x, coords.x)
-    const y = Math.min(drawStart.value.y, coords.y)
-    const width = Math.abs(coords.x - drawStart.value.x)
-    const height = Math.abs(coords.y - drawStart.value.y)
-    
-    if (width > 5 && height > 5 && selectedDefectType.value) {
-      annotations.push({ x, y, width, height, defectTypeId: selectedDefectType.value })
-      saveHistory()
-      emit('change', [...annotations])
-    }
-    
-    drawStart.value = null
-    drawingIndex.value = null
-  }
+// 获取光标样式
+const getCursorStyle = () => {
+  if (!imageLoaded.value) return 'not-allowed'
+  if (isPanningActive.value) return 'grabbing'
+  if (isPanning.value) return 'grab'
+  if (isDrawing.value) return 'crosshair'
+  if (isResizing.value) return 'nwse-resize'
+  if (isDragging.value) return 'move'
+  if (editingIndex.value !== null) return 'default'
+  return 'default'
 }
 
-// ============== 标注操作 ==============
-// 计算图片 CSS 渲染尺寸 vs 自然尺寸的缩放比
-const getImageScale = () => {
-  if (!imageRef.value) return 1
-  const img = imageRef.value
-  const displayedWidth = img.clientWidth || img.naturalWidth
-  const displayedHeight = img.clientHeight || img.naturalHeight
-  return {
-    scaleX: displayedWidth / img.naturalWidth,
-    scaleY: displayedHeight / img.naturalHeight
-  }
-}
-
-const getAnnotationStyle = (anno: Annotation) => {
-  const { scaleX, scaleY } = getImageScale()
-  return {
-    left: (anno.x * scaleX) + 'px',
-    top: (anno.y * scaleY) + 'px',
-    width: (anno.width * scaleX) + 'px',
-    height: (anno.height * scaleY) + 'px',
-    borderColor: getDefectTypeColor(anno.defectTypeId)
-  }
-}
-
-const getDrawRectStyle = () => {
-  if (!drawStart.value || !imageRef.value) return {}
-  // 需要获取当前鼠标位置，这里通过 CSS 无法直接获取
-  // 使用全局变量跟踪
-  return {
-    left: Math.min(drawStart.value.x, currentMouseX.value) + 'px',
-    top: Math.min(drawStart.value.y, currentMouseY.value) + 'px',
-    width: Math.abs(currentMouseX.value - drawStart.value.x) + 'px',
-    height: Math.abs(currentMouseY.value - drawStart.value.y) + 'px',
-    borderColor: getDefectTypeColor(selectedDefectType.value)
-  }
-}
-
-const currentMouseX = ref(0)
-const currentMouseY = ref(0)
-
-const updateMousePos = (e: MouseEvent) => {
-  const coords = getImageCoords(e)
-  currentMouseX.value = coords.x
-  currentMouseY.value = coords.y
-}
-
-const deleteAnnotation = (index: number) => {
-  annotations.splice(index, 1)
-  saveHistory()
-  emit('change', [...annotations])
-}
-
-const clearAll = async () => {
-  try {
-    await ElMessageBox.confirm('确定要清空所有标注吗？', '确认', { type: 'warning' })
-    annotations.splice(0, annotations.length)
-    saveHistory()
-    emit('change', [...annotations])
-    ElMessage.success('已清空')
-  } catch {}
-}
-
-// ============== 标注列表交互 ==============
+// 选择标注（点击列表项）
 const onAnnotationSelect = (annotation: any) => {
-  if (!annotation) return
   const index = annotations.indexOf(annotation)
   if (index !== -1) {
-    editingIndex.value = index
+    editAnnotation(index)
   }
 }
 
-// ============== 工具方法 ==============
-const getDefectTypeColor = (typeId: number) => {
-  const type = props.defectTypes.find(t => t.id === typeId)
-  return type?.color || '#409EFF'
+// 鼠标按下
+const onMouseDown = (e: MouseEvent) => {
+  if (!canvasRef.value) return
+
+  const rect = canvasRef.value.getBoundingClientRect()
+  const scaleX = canvasRef.value.width / rect.width
+  const scaleY = canvasRef.value.height / rect.height
+
+  const x = (e.clientX - rect.left) * scaleX
+  const y = (e.clientY - rect.top) * scaleY
+
+  // 中键或平移模式 → 平移图片
+  if (e.button === 1 || isPanning.value) {
+    if (e.button === 1) e.preventDefault()
+    isPanningActive.value = true
+    panStart.value = { x: e.clientX, y: e.clientY }
+    return
+  }
+
+  if (editingIndex.value !== null) {
+    const anno = annotations[editingIndex.value]
+    const handle = getResizeHandle(x, y, anno)
+    
+    if (handle) {
+      isResizing.value = true
+      resizeHandle.value = handle
+      dragStart.value = { x, y }
+      return
+    }
+
+    if (x >= anno.x && x <= anno.x + anno.width &&
+        y >= anno.y && y <= anno.y + anno.height) {
+      isDragging.value = true
+      dragStart.value = { x, y }
+      return
+    }
+  }
+
+  if (isDrawing.value) {
+    startX.value = x
+    startY.value = y
+
+    currentRect.value = {
+      x: startX.value,
+      y: startY.value,
+      width: 0,
+      height: 0,
+      defectTypeId: selectedDefectType.value,
+    }
+  }
 }
 
-const getDefectTypeName = (typeId: number) => {
-  const type = props.defectTypes.find(t => t.id === typeId)
+// 获取调整大小的控制点
+const getResizeHandle = (x: number, y: number, rect: any): string => {
+  const handles = [
+    { x: rect.x, y: rect.y, name: 'nw' },
+    { x: rect.x + rect.width, y: rect.y, name: 'ne' },
+    { x: rect.x, y: rect.y + rect.height, name: 'sw' },
+    { x: rect.x + rect.width, y: rect.y + rect.height, name: 'se' },
+  ]
+
+  for (const handle of handles) {
+    if (Math.abs(x - handle.x) < 10 && Math.abs(y - handle.y) < 10) {
+      return handle.name
+    }
+  }
+
+  return ''
+}
+
+// 鼠标移动
+const onMouseMove = (e: MouseEvent) => {
+  if (!canvasRef.value) return
+
+  // 平移中
+  if (isPanningActive.value) {
+    const dx = e.clientX - panStart.value.x
+    const dy = e.clientY - panStart.value.y
+    panX.value += dx
+    panY.value += dy
+    panStart.value = { x: e.clientX, y: e.clientY }
+    return
+  }
+
+  const rect = canvasRef.value.getBoundingClientRect()
+  const scaleX = canvasRef.value.width / rect.width
+  const scaleY = canvasRef.value.height / rect.height
+
+  const currentX = (e.clientX - rect.left) * scaleX
+  const currentY = (e.clientY - rect.top) * scaleY
+
+  if (isDragging.value && editingIndex.value !== null) {
+    const dx = currentX - dragStart.value.x
+    const dy = currentY - dragStart.value.y
+    
+    annotations[editingIndex.value].x += dx
+    annotations[editingIndex.value].y += dy
+    
+    dragStart.value = { x: currentX, y: currentY }
+    drawAllAnnotations()
+    return
+  }
+
+  if (isResizing.value && editingIndex.value !== null) {
+    const anno = annotations[editingIndex.value]
+    const dx = currentX - dragStart.value.x
+    const dy = currentY - dragStart.value.y
+
+    if (resizeHandle.value.includes('e')) {
+      anno.width += dx
+    }
+    if (resizeHandle.value.includes('w')) {
+      anno.x += dx
+      anno.width -= dx
+    }
+    if (resizeHandle.value.includes('s')) {
+      anno.height += dy
+    }
+    if (resizeHandle.value.includes('n')) {
+      anno.y += dy
+      anno.height -= dy
+    }
+
+    dragStart.value = { x: currentX, y: currentY }
+    drawAllAnnotations()
+    return
+  }
+
+  if (isDrawing.value && currentRect.value) {
+    currentRect.value.width = currentX - startX.value
+    currentRect.value.height = currentY - startY.value
+
+    drawAllAnnotations()
+  }
+}
+
+// 鼠标释放
+const onMouseUp = () => {
+  if (isPanningActive.value) {
+    isPanningActive.value = false
+    return
+  }
+
+  if (isDragging.value) {
+    isDragging.value = false
+    return
+  }
+
+  if (isResizing.value) {
+    isResizing.value = false
+    return
+  }
+
+  if (isDrawing.value && currentRect.value) {
+    if (Math.abs(currentRect.value.width) < 10 || Math.abs(currentRect.value.height) < 10) {
+      ElMessage.warning('标注框太小，请重新绘制')
+      isDrawing.value = false
+      currentRect.value = null
+      return
+    }
+
+    if (currentRect.value.width < 0) {
+      currentRect.value.x += currentRect.value.width
+      currentRect.value.width = Math.abs(currentRect.value.width)
+    }
+    if (currentRect.value.height < 0) {
+      currentRect.value.y += currentRect.value.height
+      currentRect.value.height = Math.abs(currentRect.value.height)
+    }
+
+    annotations.push({ ...currentRect.value })
+    emit('change', annotations.length)
+
+    isDrawing.value = false
+    currentRect.value = null
+
+    drawAllAnnotations()
+
+    ElMessage.success('标注已添加')
+  }
+}
+
+// 鼠标离开画布（取消平移/拖拽/绘制/缩放）
+const onMouseLeave = () => {
+  isPanningActive.value = false
+  isDragging.value = false
+  isResizing.value = false
+  if (isDrawing.value) {
+    isDrawing.value = false
+    currentRect.value = null
+    ElMessage.info('鼠标离开画布，已取消绘制')
+  }
+}
+
+// 获取缺陷类型颜色（直接使用 type.color，不再硬编码）
+const getDefectTypeColor = (defectTypeId: number) => {
+  const type = defectTypes.value.find(t => t.id === defectTypeId)
+  return type?.color || '#ff0000'
+}
+
+// 获取文字颜色（与 getDefectTypeColor 相同）
+const getTextColor = (color: string) => {
+  return color || '#ff0000'
+}
+
+// 获取缺陷类型名称
+const getDefectTypeName = (defectTypeId: number) => {
+  const type = defectTypes.value.find(t => t.id === defectTypeId)
   return type?.name || '未知'
 }
 
-const getTextColor = (bgColor: string) => {
-  if (!bgColor) return '#fff'
-  const hex = bgColor.replace('#', '')
-  const r = parseInt(hex.substring(0, 2), 16)
-  const g = parseInt(hex.substring(2, 4), 16)
-  const b = parseInt(hex.substring(4, 6), 16)
-  return (r * 299 + g * 587 + b * 114) / 1000 > 128 ? '#000' : '#fff'
+// 编辑标注
+const editAnnotation = (index: number) => {
+  editingIndex.value = index
+  isDrawing.value = false
+  currentRect.value = null
+  drawAllAnnotations()
+  ElMessage.info('已进入编辑模式，可以拖拽或调整标注框大小')
 }
 
-// ============== 历史记录 ==============
-const saveHistory = () => {
-  const snapshot = JSON.parse(JSON.stringify(annotations))
-  history.value.splice(historyIndex.value + 1)
-  history.value.push(snapshot)
-  historyIndex.value = history.value.length - 1
+// 删除标注
+const deleteAnnotation = (index: number) => {
+  const newAnnotations = [...annotations]
+  newAnnotations.splice(index, 1)
+  annotations.splice(0, annotations.length, ...newAnnotations)
+  
+  if (editingIndex.value === index) {
+    editingIndex.value = null
+  }
+  drawAllAnnotations()
+  emit('change', annotations.length)
+  ElMessage.success('标注已删除')
+}
+
+// 清空全部
+const clearAll = () => {
+  ElMessageBox.confirm('确定清空所有标注吗？', '提示', {
+    type: 'warning'
+  }).then(() => {
+    annotations.splice(0, annotations.length)
+    editingIndex.value = null
+    drawAllAnnotations()
+    emit('change', 0)
+    ElMessage.success('已清空所有标注')
+  }).catch(() => {})
+}
+
+// 重置视图
+const resetView = () => {
+  initCanvas()
+  editingIndex.value = null
+  isDrawing.value = false
+  currentRect.value = null
+  // 重置平移
+  panX.value = 0
+  panY.value = 0
+  isPanning.value = false
+}
+
+// 保存标注
+const saveAnnotations = async () => {
+  if (saving.value) return
+  
+  saving.value = true
+  try {
+    emit('save', annotations)
+    ElMessage.success('标注保存成功')
+    addToHistory()
+  } catch (error: any) {
+    ElMessage.error('保存失败：' + (error.message || '未知错误'))
+  } finally {
+    saving.value = false
+  }
+}
+
+// ==================== 撤销/重做 ====================
+
+const addToHistory = () => {
+  // 移除当前索引之后的历史
+  history.value = history.value.slice(0, historyIndex.value + 1)
+  
+  // 添加新状态
+  history.value.push(JSON.parse(JSON.stringify(annotations)))
+  
+  // 限制历史记录长度
+  if (history.value.length > maxHistoryLength) {
+    history.value.shift()
+  } else {
+    historyIndex.value++
+  }
 }
 
 const undo = () => {
   if (historyIndex.value > 0) {
     historyIndex.value--
-    annotations.splice(0, annotations.length, ...JSON.parse(JSON.stringify(history.value[historyIndex.value])))
-    emit('change', [...annotations])
+    const prevState = history.value[historyIndex.value]
+    annotations.splice(0, annotations.length, ...prevState)
+    drawAllAnnotations()
+    ElMessage.info('已撤销')
   }
 }
 
 const redo = () => {
   if (historyIndex.value < history.value.length - 1) {
     historyIndex.value++
-    annotations.splice(0, annotations.length, ...JSON.parse(JSON.stringify(history.value[historyIndex.value])))
-    emit('change', [...annotations])
+    const nextState = history.value[historyIndex.value]
+    annotations.splice(0, annotations.length, ...nextState)
+    drawAllAnnotations()
+    ElMessage.info('已重做')
   }
 }
 
-// ============== 保存 ==============
-const saveAnnotations = async () => {
-  if (annotations.length === 0) {
-    ElMessage.warning('暂无标注')
-    return
-  }
-  saving.value = true
-  try {
-    emit('save', [...annotations])
-    ElMessage.success('标注已保存')
-  } catch (e: any) {
-    ElMessage.error('保存失败: ' + (e.message || '未知错误'))
-  } finally {
-    saving.value = false
-  }
-}
+// ==================== 快捷键 ====================
 
-// ============== 重置 ==============
-const resetView = () => {
-  zoomLevel.value = 'fit'
-  panX.value = 0
-  panY.value = 0
-  nextTick(() => fitToScreen())
-}
-
-// ============== 快捷键 ==============
 const handleKeyDown = (e: KeyboardEvent) => {
-  if (e.key === 'Escape') {
-    isDrawing.value = false
-    drawStart.value = null
-  }
-  if (e.key === 'r' || e.key === 'R') {
-    if (!e.ctrlKey && !e.metaKey) resetView()
-  }
-  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+  // Ctrl+S 保存
+  if (e.ctrlKey && e.key === 's') {
     e.preventDefault()
     saveAnnotations()
+    return
   }
-  if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+  
+  // Ctrl+Z 撤销
+  if (e.ctrlKey && e.key === 'z') {
     e.preventDefault()
     undo()
+    return
   }
-  if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+  
+  // Ctrl+Y 重做
+  if (e.ctrlKey && e.key === 'y') {
     e.preventDefault()
     redo()
+    return
+  }
+  
+  // Esc 取消绘制
+  if (e.key === 'Escape') {
+    if (isDrawing.value) {
+      isDrawing.value = false
+      currentRect.value = null
+      ElMessage.info('已取消绘制')
+    } else if (editingIndex.value !== null) {
+      editingIndex.value = null
+      drawAllAnnotations()
+      ElMessage.info('已退出编辑模式')
+    }
+    return
+  }
+  
+  // R 重置视图
+  if (e.key === 'r' || e.key === 'R') {
+    resetView()
+    return
+  }
+  
+  // Space 快速切换平移
+  if (e.key === ' ') {
+    e.preventDefault()
+    togglePanMode()
+    return
+  }
+  
+  // Delete 删除选中
+  if (e.key === 'Delete' && editingIndex.value !== null) {
+    deleteAnnotation(editingIndex.value)
+    return
   }
 }
 
-// ============== 生命周期 ==============
-onMounted(() => {
-  window.addEventListener('keydown', handleKeyDown)
-  if (canvasContainer.value) {
-    canvasContainer.value.addEventListener('mousedown', handleCanvasMouseDown)
-    window.addEventListener('mousemove', (e) => {
-      updateMousePos(e)
-      handleCanvasMouseMove(e)
-    })
-    window.addEventListener('mouseup', handleCanvasMouseUp)
-  }
+// ==================== 生命周期 ====================
+
+onMounted(async () => {
+  await loadDefectTypes()
+  // 加载已保存的标注
+  await loadSavedAnnotations()
+  // 初始化历史记录
+  addToHistory()
+  // 添加键盘事件监听
+  document.addEventListener('keydown', handleKeyDown)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('keydown', handleKeyDown)
-  if (canvasContainer.value) {
-    canvasContainer.value.removeEventListener('mousedown', handleCanvasMouseDown)
-  }
-  window.removeEventListener('mousemove', handleCanvasMouseMove)
-  window.removeEventListener('mouseup', handleCanvasMouseUp)
+  document.removeEventListener('keydown', handleKeyDown)
 })
 
-// 监听图片 URL 变化
+// 监听图片变化
 watch(() => props.imageUrl, () => {
   imageLoaded.value = false
   annotations.splice(0, annotations.length)
-  history.value = []
+  editingIndex.value = null
+  history.value = [[]]
   historyIndex.value = 0
-  zoomLevel.value = 'fit'
-  panX.value = 0
-  panY.value = 0
-})
-
-// 暴露方法
-defineExpose({
-  annotations,
-  getAnnotations: () => [...annotations],
-  setAnnotations: (list: any[]) => {
-    annotations.splice(0, annotations.length, ...list.map(a => ({ ...a })))
-    saveHistory()
-  }
 })
 </script>
 
@@ -644,164 +971,149 @@ defineExpose({
   display: flex;
   flex-direction: column;
   height: 100%;
+  background: #f5f7fa;
 }
 
 .toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  background: #fff;
-  border-bottom: 1px solid #ebeef5;
+  padding: 12px 24px;
+  background: linear-gradient(to bottom, #fff, #f8fafc);
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .toolbar-left, .toolbar-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+}
+
+.toolbar-right .el-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .canvas-container {
   flex: 1;
-  overflow: hidden;
-  background: #f5f7fa;
-  position: relative;
+  overflow: auto;
+  padding: 24px;
   display: flex;
-  align-items: center;
   justify-content: center;
+  align-items: center;
+  background: #0f172a;
+  position: relative;
 }
 
 .canvas-wrapper {
   position: relative;
   display: inline-block;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+  transition: transform 0.2s ease;
 }
 
 .annotation-image {
   display: block;
   max-width: 100%;
   height: auto;
-  user-select: none;
-  -webkit-user-drag: none;
 }
 
 .annotation-image.loading {
   opacity: 0.5;
 }
 
-/* 标注框覆盖层 */
-.annotation-overlay {
+.annotation-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.loading-overlay {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  pointer-events: none;
-}
-
-.annotation-box {
-  position: absolute;
-  border: 2px solid #409EFF;
-  background: rgba(64, 158, 255, 0.1);
-  pointer-events: auto;
-  cursor: pointer;
-  transition: box-shadow 0.2s;
-}
-
-.annotation-box:hover {
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
-}
-
-.annotation-box.selected {
-  border-width: 3px;
-  box-shadow: 0 0 12px rgba(0, 0, 0, 0.4);
-}
-
-.annotation-box.drawing {
-  border-style: dashed;
-  opacity: 0.8;
-}
-
-.annotation-label {
-  position: absolute;
-  top: -22px;
-  left: 0;
-  padding: 2px 8px;
-  color: #fff;
-  font-size: 12px;
-  white-space: nowrap;
-  border-radius: 2px 2px 0 0;
-}
-
-.annotation-delete-btn {
-  position: absolute;
-  top: -10px;
-  right: -10px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: #F56C6C;
-  color: #fff;
-  border: none;
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-  display: none;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 0;
-}
-
-.annotation-box:hover .annotation-delete-btn {
-  display: flex;
-}
-
-.loading-overlay {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
-  color: #909399;
+  background: rgba(255, 255, 255, 0.95);
+  color: #64748b;
+  gap: 12px;
+  z-index: 10;
 }
 
 .shortcut-tip {
   position: absolute;
-  bottom: 16px;
+  top: 12px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 8px;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 8px 16px;
+  border-radius: 20px;
+  z-index: 20;
+  color: #fff;
+  font-size: 12px;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 .annotations-panel {
   background: #fff;
-  border-top: 1px solid #ebeef5;
-  padding: 12px 16px;
+  border-top: 1px solid #e2e8f0;
   max-height: 350px;
-  overflow: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  padding: 12px 24px;
+  background: linear-gradient(to bottom, #f8fafc, #fff);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-
-.header-left h3 {
-  margin: 0;
-  font-size: 14px;
+  gap: 12px;
 }
 
 .header-right {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
+}
+
+.mono-text {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: #64748b;
 }
 </style>

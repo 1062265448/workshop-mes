@@ -70,8 +70,9 @@ export class DistributionController {
     @Query('keyword') keyword?: string,
     @Query('grade') grade?: string,
     @Query('status') status?: string,
+    @Query('productType') productType?: string,
   ) {
-    return this.distributionService.getInventory(page || 1, limit || 20, keyword, grade, status);
+    return this.distributionService.getInventory(page || 1, limit || 20, keyword, grade, status, productType);
   }
 
   @Get('inventory/:id')
@@ -100,6 +101,14 @@ export class DistributionController {
   @Delete('inventory/:id')
   async deleteInventory(@Param('id', new ParseIntPipe()) id: number) {
     return this.distributionService.deleteInventory(id);
+  }
+
+  @Post('inventory/batch-delete')
+  async batchDeleteInventory(@Body('ids') ids: number[]) {
+    if (!ids || ids.length === 0) {
+      throw new BadRequestException('请提供要删除的库存ID');
+    }
+    return this.distributionService.batchDeleteInventory(ids);
   }
 
   // ==================== AI 识别 ====================

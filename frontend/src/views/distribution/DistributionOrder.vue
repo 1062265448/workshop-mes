@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="distribution-page">
     <!-- 页面头部 -->
     <div class="page-header">
@@ -71,17 +71,31 @@
               <el-option label="Ni9980" value="Ni9980" />
               <el-option label="Ni9950" value="Ni9950" />
             </el-select>
-            <el-select v-model="invStatus" placeholder="状态" clearable style="width:120px" @change="loadInventory">
+            <el-select v-model="invStatus" placeholder="状态" clearable style="width:100px" @change="loadInventory">
               <el-option label="可用" value="available" />
               <el-option label="已锁定" value="reserved" />
               <el-option label="已发货" value="shipped" />
             </el-select>
+            <el-select v-model="invProductType" placeholder="产品类型" clearable style="width:140px" @change="loadInventory">
+              <el-option label="电解镍" value="电解镍" />
+              <el-option label="电积镍" value="电积镍" />
+              <el-option label="不锈钢专用镍" value="不锈钢专用镍" />
+              <el-option label="电镀专用镍" value="电镀专用镍" />
+            </el-select>
+            <el-button type="danger" plain size="small" :disabled="selectedInventory.length===0" @click="batchDeleteInventory">
+              <el-icon><Delete /></el-icon> 批量删除 ({{ selectedInventory.length }})
+            </el-button>
             <el-button type="success" @click="openAddInventory">
               <el-icon><Plus /></el-icon> 新增库存
             </el-button>
           </div>
 
-          <el-table :data="inventoryList" v-loading="invLoading" stripe border>
+          <el-table :data="inventoryList" v-loading="invLoading" stripe border @selection-change="sel => selectedInventory=sel">
+            <el-table-column type="selection" width="50" />
+            <el-table-column label="产品类型" prop="productType" width="130">
+              <template #default="{ row }"><el-tag v-if="row.productType" size="small" type="success">{{ row.productType }}</el-tag><span v-else>-</span></template>
+            </el-table-column>
+            <el-table-column label="包号" prop="packageNo" width="80" align="center" />
             <el-table-column label="批号" prop="batchNo" width="140" />
             <el-table-column label="品级" width="100">
               <template #default="{ row }">
@@ -92,8 +106,8 @@
             <el-table-column label="重量 (kg)" width="110" align="right">
               <template #default="{ row }">{{ Number(row.weight).toFixed(2) }}</template>
             </el-table-column>
-            <el-table-column label="片数" prop="pieceCount" width="80" align="right" />
-            <el-table-column label="位置" prop="location" width="120" />
+            <el-table-column label="片数" prop="pieceCountt" width="80" align="right" />
+            <el-table-column label="备注" prop="remark" width="120" show-overflow-tooltip />
             <el-table-column label="状态" width="100">
               <template #default="{ row }">
                 <el-tag :type="getStatusType(row.status)">{{ getStatusLabel(row.status) }}</el-tag>
@@ -201,15 +215,17 @@
             <el-checkbox v-model="selectAll" @change="handleSelectAllChange">全选</el-checkbox>
             <el-button type="primary" size="small" @click="batchImportAll" :disabled="selectedRecords.length===0">批量导入（{{ selectedRecords.length }} 条）</el-button>
           </div>
-          <el-table :data="paginatedData" max-height="400" border size="small" @selection-change="sel=>selectedRecords=sel">
+          <el-table ref="aiTableRef" :data="paginatedData" row-key="_uid" max-height="400" border size="small" @selection-change="onSelectionChange" @select-all="onTableSelectAll">
             <el-table-column type="selection" width="50" />
+            <el-table-column prop="productType" label="产品类型" width="110" align="center" />
             <el-table-column prop="packageNo" label="包号" width="70" align="center" />
-            <el-table-column prop="pieceCount" label="块数" width="70" align="right" />
-            <el-table-column prop="netWeight" label="净重(kg)" width="100" align="right" />
-            <el-table-column prop="grade" label="牌号" width="90" align="center">
+            <el-table-column prop="batchNo" label="批号" width="130" />
+            <el-table-column prop="grade" label="品级" width="90" align="center">
               <template #default="{ row }"><el-tag size="small" :type="getGradeType(row.grade)">{{ row.grade }}</el-tag></template>
             </el-table-column>
-            <el-table-column prop="batchNo" label="批号" width="130" />
+            <el-table-column prop="specification" label="规格" width="100" />
+            <el-table-column prop="netWeight" label="重量(kg)" width="100" align="right" />
+            <el-table-column prop="pieceCountt" label="片数" width="80" align="right" />
             <el-table-column label="操作" width="170" fixed="right">
               <template #default="{ $index }">
                 <el-button link type="primary" size="small" @click="quickAddRecord($index)">导入</el-button>
@@ -233,6 +249,11 @@
       <el-form :model="invForm" label-width="100px">
         <el-row :gutter="16">
           <el-col :span="12">
+            <el-form-item label="包号" required>
+              <el-input v-model="invForm.packageNo" placeholder="如 41" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
             <el-form-item label="批号" required>
               <el-input v-model="invForm.batchNo" placeholder="如 B20260414001" />
             </el-form-item>
@@ -248,6 +269,16 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
+            <el-form-item label="产品类型">
+              <el-select v-model="invForm.productType" placeholder="选择产品类型" clearable style="width:100%">
+                <el-option label="电解镍" value="电解镍" />
+                <el-option label="电积镍" value="电积镍" />
+                <el-option label="不锈钢专用镍" value="不锈钢专用镍" />
+                <el-option label="电镀专用镍" value="电镀专用镍" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
             <el-form-item label="规格">
               <el-input v-model="invForm.specification" placeholder="如 99.96%" />
             </el-form-item>
@@ -259,32 +290,12 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="片数" required>
-              <el-input-number v-model="invForm.pieceCount" :min="0" style="width:100%" />
+              <el-input-number v-model="invForm.pieceCountt" :min="0" style="width:100%" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="存放位置">
-              <el-input v-model="invForm.location" placeholder="如 A区-01排" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="镍含量 (%)">
-              <el-input-number v-model="invForm.nickelContent" :min="0" :max="100" :precision="2" style="width:100%" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="检测日期">
-              <el-date-picker v-model="invForm.inspectionDate" type="date" placeholder="选择日期" style="width:100%" value-format="YYYY-MM-DD" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="质量证明书">
-              <el-input v-model="invForm.certificateNo" placeholder="编号（可选）" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="24">
             <el-form-item label="备注">
-              <el-input v-model="invForm.remark" type="textarea" :rows="2" />
+              <el-input v-model="invForm.remark" type="textarea" :rows="3" placeholder="可选备注信息" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -333,8 +344,11 @@
           <el-table-column label="重量(kg)" width="100" align="right">
             <template #default="{ row }">{{ Number(row.weight).toFixed(2) }}</template>
           </el-table-column>
-          <el-table-column prop="pieceCount" label="片数" width="80" align="right" />
+          <el-table-column prop="pieceCountt" label="片数" width="80" align="right" />
           <el-table-column prop="location" label="位置" width="120" />
+          <el-table-column prop="productType" label="产品类型" width="120">
+            <template #default="{ row }"><el-tag v-if="row.productType" size="small" type="success">{{ row.productType }}</el-tag><span v-else>-</span></template>
+          </el-table-column>
         </el-table>
 
         <div class="order-summary" style="margin-top:16px">
@@ -380,7 +394,7 @@
           <template #default="{ row }">{{ row.weight ? Number(row.weight).toFixed(2) : '-' }}</template>
         </el-table-column>
         <el-table-column label="配货片数" width="100" align="right">
-          <template #default="{ row }">{{ row.pieceCount || 0 }}</template>
+          <template #default="{ row }">{{ row.pieceCountt || 0 }}</template>
         </el-table-column>
       </el-table>
     </el-dialog>
@@ -451,9 +465,11 @@ const inventoryList = ref<any[]>([])
 const invKeyword = ref('')
 const invGrade = ref('')
 const invStatus = ref('')
+const invProductType = ref('')
 const invPage = ref(1)
 const invPageSize = ref(20)
 const invTotal = ref(0)
+const selectedInventory = ref<any[]>([])
 
 // 配货单
 const orderLoading = ref(false)
@@ -469,7 +485,7 @@ const showInvDialog = ref(false)
 const editingInvId = ref<number | null>(null)
 const invSubmitting = ref(false)
 const invForm = reactive<any>({
-  batchNo: '', grade: '', specification: '', weight: 0, pieceCount: 0,
+  batchNo: '', grade: '', productType: '', specification: '', weight: 0, pieceCountt: 0,
   location: '', nickelContent: null, inspectionDate: null, certificateNo: '', remark: ''
 })
 
@@ -504,6 +520,22 @@ const selectedRecords = ref<any[]>([])
 const selectAll = ref(false)
 const aiPage = ref(1)
 const aiPageSize = ref(10)
+const aiTableRef = ref<any>(null)
+
+const getTableRef = () => aiTableRef.value?.elTableRef || aiTableRef.value
+
+// 分页切换时恢复选中状态
+watch(aiPage, () => {
+  setTimeout(() => {
+    const tableRef = getTableRef()
+    if (tableRef) {
+      paginatedData.value.forEach((row: any) => {
+        const isSelected = selectedRecords.value.some((s: any) => s._uid === row._uid)
+        tableRef.toggleRowSelection(row, isSelected)
+      })
+    }
+  }, 0)
+})
 
 // ==================== 计算属性 ====================
 const paginatedData = computed(() => {
@@ -516,7 +548,7 @@ const orderTotalWeight = computed(() =>
 )
 
 const orderTotalPieces = computed(() =>
-  selectedStock.value.reduce((s, i) => s + Number(i.pieceCount || 0), 0)
+  selectedStock.value.reduce((s, i) => s + Number(i.pieceCountt || 0), 0)
 )
 
 // ==================== 数据加载 ====================
@@ -535,6 +567,7 @@ const loadInventory = async () => {
       keyword: invKeyword.value || undefined,
       grade: invGrade.value || undefined,
       status: invStatus.value || undefined,
+      productType: invProductType.value || undefined,
     })
     inventoryList.value = res.data || []
     invTotal.value = res.total || 0
@@ -577,8 +610,8 @@ const refreshAll = async () => {
 const openAddInventory = () => {
   editingInvId.value = null
   Object.assign(invForm, {
-    batchNo: '', grade: '', specification: '', weight: 0, pieceCount: 0,
-    location: '', nickelContent: null, inspectionDate: null, certificateNo: '', remark: ''
+    packageNo: '', batchNo: '', grade: '', productType: '', specification: '', weight: 0, pieceCountt: 0,
+    remark: ''
   })
   aiRecognizedData.value = []
   showInvDialog.value = true
@@ -591,8 +624,8 @@ const openEditInventory = (row: any) => {
 }
 
 const submitInventory = async () => {
-  if (!invForm.batchNo || !invForm.grade) {
-    ElMessage.warning('请填写批号和品级')
+  if (!invForm.packageNo || !invForm.batchNo || !invForm.grade) {
+    ElMessage.warning('请填写包号、批号和品级')
     return
   }
   invSubmitting.value = true
@@ -625,6 +658,19 @@ const handleDeleteInventory = async (row: any) => {
   }
 }
 
+const batchDeleteInventory = async () => {
+  if (!selectedInventory.value.length) return
+  try {
+    await ElMessageBox.confirm(`确定删除 ${selectedInventory.value.length} 条库存？`, '批量删除', { type: 'warning' })
+    const ids = selectedInventory.value.map(r => r.id)
+    await distApi.batchDeleteInventory(ids)
+    ElMessage.success(`已删除 ${ids.length} 条`)
+    selectedInventory.value = []
+    loadInventory()
+    loadStats()
+  } catch {}
+}
+
 // ==================== AI 识别 ====================
 const beforeAIUpload = (file: File) => {
   if (!file.type.startsWith('image/')) {
@@ -651,7 +697,8 @@ const handleCustomUpload = async ({ file }: any) => {
     recognizingDetail.value = '识别完成，正在解析...'
 
     if (result.success) {
-      aiRecognizedData.value = result.data || []
+      // 为每条数据添加唯一 _uid 以支持跨页选择
+      aiRecognizedData.value = (result.data || []).map((item: any, idx: number) => ({ ...item, _uid: `${Date.now()}-${idx}` }))
       ElMessage.success(`识别成功，共 ${result.count} 条记录`)
     } else {
       ElMessage.error('识别失败：' + (result.error || '未知错误'))
@@ -665,20 +712,71 @@ const handleCustomUpload = async ({ file }: any) => {
 }
 
 const handleSelectAllChange = (val: boolean) => {
-  selectedRecords.value = val ? [...paginatedData.value] : []
+  // 跨页全选：选中所有识别数据
+  if (val) {
+    selectedRecords.value = [...aiRecognizedData.value]
+  } else {
+    selectedRecords.value = []
+  }
+  // 更新当前页表格的勾选状态
+  setTimeout(() => {
+    const tableRef = getTableRef()
+    if (tableRef) {
+      if (val) {
+        paginatedData.value.forEach((row: any) => tableRef.toggleRowSelection(row, true))
+      } else {
+        tableRef.clearSelection()
+      }
+    }
+  }, 0)
+}
+
+const onSelectionChange = (sel: any[]) => {
+  // 保留非当前页的已选项，合并当前页的新选中
+  const currentPageUids = new Set(paginatedData.value.map((r: any) => r._uid))
+  const otherSelected = selectedRecords.value.filter((r: any) => !currentPageUids.has(r._uid))
+  selectedRecords.value = [...otherSelected, ...sel]
+}
+
+const onTableSelectAll = (rows: any[]) => {
+  if (rows.length > 0) {
+    // 表头勾选全选：选中所有数据
+    selectedRecords.value = [...aiRecognizedData.value]
+  } else {
+    // 表头取消全选：清空
+    selectedRecords.value = []
+  }
+  // 同步表头全选图标状态
+  syncTableHeaderCheck()
+}
+
+const syncTableHeaderCheck = () => {
+  // 如果所有数据都已选中，表头显示勾选状态
+  const tableRef = getTableRef()
+  if (!tableRef) return
+  const allSelected = selectedRecords.value.length === aiRecognizedData.value.length && aiRecognizedData.value.length > 0
+  paginatedData.value.forEach((row: any) => tableRef.toggleRowSelection(row, allSelected))
 }
 
 const batchImportAll = async () => {
   if (!selectedRecords.value.length) return
   try {
-    const importData = selectedRecords.value.map((r: any) => ({
-      batchNo: r.batchNo || `B${Date.now()}`,
-      grade: r.grade || 'Ni9996',
-      specification: `${r.grade || 'Ni9996'}`,
-      weight: r.netWeight || 0,
-      pieceCount: r.pieceCount || 0,
-      sourceType: 'ai',
-    }))
+    const importData = selectedRecords.value
+      .filter(r => r.packageNo && r.netWeight)
+      .map((r: any) => ({
+        packageNo: r.packageNo || 0,
+        batchNo: r.batchNo || `B${Date.now()}`,
+        grade: r.grade || 'Ni9996',
+        productType: r.productType || null,
+        specification: `${r.grade || 'Ni9996'}`,
+        weight: r.netWeight || 0,
+        pieceCount: r.pieceCount || 0,
+        sourceType: 'ai',
+      }))
+    if (importData.length === 0) {
+      ElMessage.warning('没有有效的数据可导入')
+      return
+    }
     await distApi.batchCreateInventory(importData)
     ElMessage.success(`成功导入 ${importData.length} 条记录`)
     aiRecognizedData.value = aiRecognizedData.value.filter((_: any, i: number) => !selectedRecords.value.includes(paginatedData.value[i]))
@@ -693,13 +791,17 @@ const batchImportAll = async () => {
 const quickAddRecord = (index: number) => {
   const r = paginatedData.value[index]
   if (!r) return
+  const globalIndex = (aiPage.value - 1) * aiPageSize.value + index
   Object.assign(invForm, {
+    packageNo: r.packageNo || invForm.packageNo,
     batchNo: r.batchNo || invForm.batchNo,
     grade: r.grade || invForm.grade,
+    productType: r.productType || invForm.productType,
     weight: r.netWeight || 0,
-    pieceCount: r.pieceCount || 0,
+    pieceCountt: r.pieceCountt || 0,
     specification: r.grade || 'Ni9996',
   })
+  aiRecognizedData.value.splice(globalIndex, 1)
 }
 
 const removeAIRecord = (index: number) => {
@@ -739,7 +841,7 @@ const submitOrder = async () => {
     const items = selectedStock.value.map(s => ({
       stockId: s.id,
       weight: Number(s.weight),
-      pieceCount: Number(s.pieceCount),
+      pieceCountt: Number(s.pieceCountt),
     }))
     await distApi.createOrder({
       customerId: orderForm.customerId,

@@ -472,8 +472,10 @@ model Customer {
 // 库存批次表（平面库可用库存）
 model InventoryStock {
   id               Int      @id @default(autoincrement())
+  packageNo        Int?     @map("package_no")               // 包号
   batchNo          String   @map("batch_no") @db.VarChar(50)     // 批号
   grade            String   @db.VarChar(20)                       // 品级 Ni9996/Ni9990...
+  productType      String?  @map("product_type") @db.VarChar(50)  // 产品类型：电解镍/电积镍/不锈钢专用镍/电镀专用镍
   specification    String?  @db.VarChar(50)                       // 规格
   weight           Decimal  @default(0) @db.Decimal(10, 3)        // 重量 kg
   pieceCount       Int      @default(0) @map("piece_count")       // 片数
@@ -507,7 +509,7 @@ model DistributionOrderItem {
   createdAt   DateTime @default(now()) @map("created_at")
 
   order       DistributionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  stock       InventoryStock    @relation(fields: [stockId], references: [id])
+  stock       InventoryStock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
 
   @@map("distribution_order_item")
   @@index([orderId])

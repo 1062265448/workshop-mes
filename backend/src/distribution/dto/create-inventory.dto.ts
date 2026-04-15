@@ -16,6 +16,12 @@ import { Type } from 'class-transformer';
 // ==================== 库存 DTO ====================
 
 export class CreateInventoryDto {
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  @Type(() => Number)
+  packageNo?: number; // 包号
+
   @IsString()
   @MinLength(1)
   batchNo: string; // 批号
@@ -23,6 +29,10 @@ export class CreateInventoryDto {
   @IsString()
   @MinLength(1)
   grade: string; // 品级 Ni9996/Ni9990/Ni9980/Ni9950
+
+  @IsString()
+  @IsOptional()
+  productType?: string; // 产品类型：电解镍/电积镍/不锈钢专用镍/电镀专用镍
 
   @IsString()
   @IsOptional()
@@ -72,6 +82,12 @@ export class CreateInventoryDto {
 }
 
 export class UpdateInventoryDto {
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  @Type(() => Number)
+  packageNo?: number;
+
   @IsString()
   @IsOptional()
   @MinLength(1)
@@ -81,6 +97,10 @@ export class UpdateInventoryDto {
   @IsOptional()
   @MinLength(1)
   grade?: string;
+
+  @IsString()
+  @IsOptional()
+  productType?: string;
 
   @IsString()
   @IsOptional()

@@ -81,7 +81,6 @@
       <ImageAnnotator
         ref="annotatorRef"
         :image-url="selectedImage"
-        :defect-types="defectTypes"
         :sample-id="sampleId"
         :defect-type-id="defectTypeId"
         @save="handleSaveAnnotations"

@@ -9,7 +9,7 @@ export class DistributionService {
 
   // ==================== Inventory ====================
 
-  async getInventory(page = 1, limit = 20, keyword?: string, grade?: string, status?: string) {
+  async getInventory(page = 1, limit = 20, keyword?: string, grade?: string, status?: string, productType?: string) {
     const skip = (page - 1) * limit;
     const where: any = {};
     if (keyword) {
@@ -22,6 +22,7 @@ export class DistributionService {
     }
     if (grade) where.grade = grade;
     if (status) where.status = status;
+    if (productType) where.productType = productType;
 
     const [data, total] = await Promise.all([
       this.prisma.inventoryStock.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' } }),
@@ -41,6 +42,7 @@ export class DistributionService {
       data: {
         batchNo: dto.batchNo,
         grade: dto.grade,
+        productType: dto.productType || null,
         specification: dto.specification || null,
         weight: dto.weight || 0,
         pieceCount: dto.pieceCount || 0,
@@ -69,6 +71,18 @@ export class DistributionService {
   async deleteInventory(id: number) {
     const existing = await this.prisma.inventoryStock.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(`Stock ID ${id} not found`);
+
+    // Check if referenced by ACTIVE order items
+    const activeRefs = await this.prisma.distributionOrderItem.count({
+      where: {
+        stockId: id,
+        order: { deletedAt: null },
+      },
+    });
+    if (activeRefs > 0) {
+      throw new BadRequestException(`该库存已被 ${activeRefs} 个有效配货单引用，无法删除。请先删除或取消相关配货单。`);
+    }
+
     return this.prisma.inventoryStock.delete({ where: { id } });
   }
 
@@ -77,6 +91,7 @@ export class DistributionService {
       data: items.map((item) => ({
         batchNo: item.batchNo,
         grade: item.grade,
+        productType: item.productType || null,
         specification: item.specification || null,
         weight: item.weight || 0,
         pieceCount: item.pieceCount || 0,
@@ -88,6 +103,27 @@ export class DistributionService {
         sourceType: item.sourceType || 'batch_import',
         status: 'available',
       })),
+    });
+  }
+
+  async batchDeleteInventory(ids: number[]) {
+    return this.prisma.$transaction(async (tx) => {
+      // Check if any are referenced by active orders
+      const activeRefs = await tx.distributionOrderItem.count({
+        where: {
+          stockId: { in: ids },
+          order: { deletedAt: null },
+        },
+      });
+      if (activeRefs > 0) {
+        throw new BadRequestException(`有 ${activeRefs} 条库存被有效配货单引用，无法删除`);
+      }
+      // Cascade will clean up order items for deleted orders
+      const count = await tx.inventoryStock.deleteMany({
+        where: { id: { in: ids } },
+      });
+      this.logger.log(`Batch deleted ${count.count} inventory items`);
+      return count;
     });
   }
 
@@ -182,9 +218,26 @@ export class DistributionService {
   }
 
   async deleteOrder(id: number) {
-    const order = await this.prisma.distributionOrder.findFirst({ where: { id, deletedAt: null } });
+    const order = await this.prisma.distributionOrder.findFirst({
+      where: { id, deletedAt: null },
+      include: { items: true },
+    });
     if (!order) throw new NotFoundException(`Order ID ${id} not found`);
-    return this.prisma.distributionOrder.update({ where: { id }, data: { deletedAt: new Date() } });
+
+    return this.prisma.$transaction(async (tx) => {
+      // Release reserved inventory back to available
+      for (const item of order.items) {
+        await tx.inventoryStock.update({
+          where: { id: item.stockId },
+          data: { status: 'available' },
+        });
+      }
+      // Soft delete order
+      return tx.distributionOrder.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
+    });
   }
 
   async updateOrderStatus(id: number, status: string, extra?: any) {
@@ -220,12 +273,30 @@ export class DistributionService {
   }
 
   async batchDeleteOrders(ids: number[]) {
-    const count = await this.prisma.distributionOrder.updateMany({
-      where: { id: { in: ids }, deletedAt: null },
-      data: { deletedAt: new Date() },
+    return this.prisma.$transaction(async (tx) => {
+      const orders = await tx.distributionOrder.findMany({
+        where: { id: { in: ids }, deletedAt: null },
+        include: { items: true },
+      });
+      if (orders.length === 0) return { count: 0 };
+
+      // Release inventory for all affected orders
+      for (const order of orders) {
+        for (const item of order.items) {
+          await tx.inventoryStock.update({
+            where: { id: item.stockId },
+            data: { status: 'available' },
+          });
+        }
+      }
+
+      const count = await tx.distributionOrder.updateMany({
+        where: { id: { in: ids }, deletedAt: null },
+        data: { deletedAt: new Date() },
+      });
+      this.logger.log(`Batch deleted ${count.count} orders, released inventory`);
+      return count;
     });
-    this.logger.log(`Batch deleted ${count.count} orders`);
-    return count;
   }
 
   // ==================== Customers ====================

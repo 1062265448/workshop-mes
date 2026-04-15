@@ -14,6 +14,7 @@ export const getInventory = (params?: {
   keyword?: string
   grade?: string
   status?: string
+  productType?: string
 }) => {
   return api.get('/distribution/inventory', { params })
 }
@@ -36,6 +37,10 @@ export const updateInventory = (id: number, data: any) => {
 
 export const deleteInventory = (id: number) => {
   return api.delete(`/distribution/inventory/${id}`)
+}
+
+export const batchDeleteInventory = (ids: number[]) => {
+  return api.post('/distribution/inventory/batch-delete', { ids })
 }
 
 export const recognizeInventory = (file: File) => {

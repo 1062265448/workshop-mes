@@ -46,6 +46,12 @@ export class QwenAIService {
   private async callQwenVL(imageUrl: string): Promise<any[]> {
     const prompt = `你是一位专业的数据录入员。请识别这张库存计量报表图片，提取表格中的所有数据。
 
+⚠️ 重要：识别表格左上角的产品类型信息
+- 图片左上角有一个表格头部区域，包含"品名"和"产品名称"等字段
+- 在**品名的右侧**或**产品名称**字段后面，有产品类型文字
+- 常见的产品类型文字：电解镍、电积镍、不锈钢专用镍、电镀专用镍
+- 请仔细识别这些文字，并将其作为 productType 字段返回
+
 表格包含以下列：
 - 包号：数字（如 41, 42, 43...）
 - 块数：数字（如 34, 33, 32...）
@@ -65,12 +71,16 @@ export class QwenAIService {
   "netWeightSubtotal": 净重小计（数字或 null）,
   "grossWeight": 毛重（数字）,
   "grade": 牌号（字符串）,
+  "productType": 产品类型（字符串，从图片左上角品名右侧识别，如 电解镍/电积镍/不锈钢专用镍/电镀专用镍）,
   "batchNo": 批号（字符串）,
   "inspector": 计量员（字符串）,
   "date": 日期（字符串，格式 YYYY-MM-DD）
 }
 
-只返回 JSON 数组，不要其他说明文字。如果某些字段无法识别，设为 null。`;
+注意：
+1. 只返回表格数据行，不要返回合计行
+2. 如果某些字段无法识别，设为 null
+3. productType 是图片中的固定信息，所有行都应该是相同的值`;
 
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
@@ -132,6 +142,7 @@ export class QwenAIService {
             ...item,
             batchNo: item.batchNo || batchNo,
             grade: item.grade || grade,
+            productType: item.productType || null,
             date: item.date || date,
           }));
         }
