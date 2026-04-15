@@ -11,6 +11,12 @@ async function bootstrap() {
   // 启用静态文件服务（uploads 目录）
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {
     prefix: '/uploads/',
+    setHeaders: (res, path) => {
+      if (path.endsWith('.png')) res.setHeader('Content-Type', 'image/png');
+      else if (path.endsWith('.jpg') || path.endsWith('.jpeg')) res.setHeader('Content-Type', 'image/jpeg');
+      else if (path.endsWith('.gif')) res.setHeader('Content-Type', 'image/gif');
+      else if (path.endsWith('.webp')) res.setHeader('Content-Type', 'image/webp');
+    },
   });
 
   // 启用 CORS
