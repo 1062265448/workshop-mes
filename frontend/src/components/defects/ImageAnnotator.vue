@@ -251,10 +251,14 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 interface Props {
   imageUrl: string
   defectTypes: any[]
+  sampleId?: number
+  defectTypeId?: number
   initialAnnotations?: any[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  sampleId: undefined,
+  defectTypeId: undefined,
   initialAnnotations: () => []
 })
 
@@ -305,7 +309,7 @@ const historyIndex = ref(0)
 // ============== 图片加载 ==============
 const onImageLoad = () => {
   imageLoaded.value = true
-  if (props.initialAnnotations.length > 0) {
+  if (props.initialAnnotations && props.initialAnnotations.length > 0) {
     annotations.splice(0, annotations.length, ...props.initialAnnotations.map(a => ({ ...a })))
     saveHistory()
   }
@@ -429,12 +433,25 @@ const handleCanvasMouseUp = (e: MouseEvent) => {
 }
 
 // ============== 标注操作 ==============
-const getAnnotationStyle = (anno: Annotation) => {
+// 计算图片 CSS 渲染尺寸 vs 自然尺寸的缩放比
+const getImageScale = () => {
+  if (!imageRef.value) return 1
+  const img = imageRef.value
+  const displayedWidth = img.clientWidth || img.naturalWidth
+  const displayedHeight = img.clientHeight || img.naturalHeight
   return {
-    left: anno.x + 'px',
-    top: anno.y + 'px',
-    width: anno.width + 'px',
-    height: anno.height + 'px',
+    scaleX: displayedWidth / img.naturalWidth,
+    scaleY: displayedHeight / img.naturalHeight
+  }
+}
+
+const getAnnotationStyle = (anno: Annotation) => {
+  const { scaleX, scaleY } = getImageScale()
+  return {
+    left: (anno.x * scaleX) + 'px',
+    top: (anno.y * scaleY) + 'px',
+    width: (anno.width * scaleX) + 'px',
+    height: (anno.height * scaleY) + 'px',
     borderColor: getDefectTypeColor(anno.defectTypeId)
   }
 }
@@ -479,6 +496,7 @@ const clearAll = async () => {
 
 // ============== 标注列表交互 ==============
 const onAnnotationSelect = (annotation: any) => {
+  if (!annotation) return
   const index = annotations.indexOf(annotation)
   if (index !== -1) {
     editingIndex.value = index
@@ -660,6 +678,8 @@ defineExpose({
 
 .annotation-image {
   display: block;
+  max-width: 100%;
+  height: auto;
   user-select: none;
   -webkit-user-drag: none;
 }

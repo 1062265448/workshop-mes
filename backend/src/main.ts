@@ -4,20 +4,22 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { join } from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import * as express from 'express';
+import * as mime from 'mime-types';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // 启用静态文件服务（uploads 目录）
-  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
-    prefix: '/uploads/',
-    setHeaders: (res, path) => {
-      if (path.endsWith('.png')) res.setHeader('Content-Type', 'image/png');
-      else if (path.endsWith('.jpg') || path.endsWith('.jpeg')) res.setHeader('Content-Type', 'image/jpeg');
-      else if (path.endsWith('.gif')) res.setHeader('Content-Type', 'image/gif');
-      else if (path.endsWith('.webp')) res.setHeader('Content-Type', 'image/webp');
-    },
+  app.use('/uploads/', (req: any, res: any, next: any) => {
+    const filePath = join(__dirname, '..', 'uploads', req.path);
+    const contentType = mime.lookup(filePath);
+    if (contentType) {
+      res.setHeader('Content-Type', contentType);
+    }
+    next();
   });
+  app.use('/uploads/', express.static(join(__dirname, '..', 'uploads')));
 
   // 启用 CORS
   app.enableCors({
