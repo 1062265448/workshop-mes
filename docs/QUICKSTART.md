@@ -131,7 +131,6 @@ npm run dev
 ### 第三阶段：扩展模块
 - [ ] Project 项目管理
 - [ ] Defect 缺陷检测
-- [ ] Distribution 配货管理
 - [ ] LLM AI 模块（可选）
 
 ---

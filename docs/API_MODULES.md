@@ -58,12 +58,6 @@
 - `POST /defect-samples` - 上传缺陷样本
 - `PATCH /defect-samples/:id/review` - 审核样本
 
-### 8. Distribution 平面库配货
-- `GET /distribution/customers` - 客户列表
-- `POST /distribution/customers` - 创建客户
-- `GET /distribution/orders` - 配货订单列表
-- `POST /distribution/orders` - 创建配货订单
-- `PATCH /distribution/orders/:id/status` - 更新订单状态
 
 ### 9. Upload 文件上传
 - `POST /upload` - 上传文件
@@ -96,9 +90,7 @@
 12. project_documents - 项目文档
 13. defect_types - 缺陷类型
 14. defect_samples - 缺陷样本
-15. customers - 客户
-16. distribution_orders - 配货订单
-17. audit_logs - 审计日志
+15. audit_logs - 审计日志
 
 ---
 

@@ -97,7 +97,6 @@ import {
   Shop,
   FolderOpened,
   Search,
-  ShoppingCart,
   MagicStick,
   Fold,
   Expand,
@@ -120,7 +119,6 @@ const menuItems = [
   { path: '/production', title: '生产管理', icon: Shop },
   { path: '/projects', title: '项目管理', icon: FolderOpened },
   { path: '/defects', title: '缺陷检测', icon: Search },
-  { path: '/distribution', title: '平面库配货', icon: ShoppingCart },
   { path: '/ai', title: 'AI 助手', icon: MagicStick, badge: 'New' },
 ]
 </script>

@@ -2,31 +2,31 @@ version: '3.8'
 
 services:
   # 复用现有 MySQL 容器
-  # mysql:
-  #   image: mysql:8.0
-  #   container_name: workshop-mysql
-  #   environment:
-  #     MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-workshop123}
-  #     MYSQL_DATABASE: workshop_mes
-  #     MYSQL_USER: workshop
-  #     MYSQL_PASSWORD: ${DB_PASSWORD:-workshop456}
-  #   ports:
-  #     - "3306:3306"
-  #   volumes:
-  #     - mysql_data:/var/lib/mysql
-  #   networks:
-  #     - workshop-network
+  mysql:
+    image: mysql:8.0
+    container_name: workshop-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-workshop123}
+      MYSQL_DATABASE: workshop_mes
+      MYSQL_USER: workshop
+      MYSQL_PASSWORD: ${DB_PASSWORD:-workshop456}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - workshop-network
 
   # 复用现有 Redis 容器
-  # redis:
-  #   image: redis:7-alpine
-  #   container_name: workshop-redis
-  #   ports:
-  #     - "6379:6379"
-  #   volumes:
-  #     - redis_data:/data
-  #   networks:
-  #     - workshop-network
+  redis:
+    image: redis:7-alpine
+    container_name: workshop-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - workshop-network
 
   backend:
     build:

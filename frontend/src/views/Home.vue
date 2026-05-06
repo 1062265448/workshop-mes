@@ -149,7 +149,6 @@ import {
   Shop,
   FolderOpened,
   Search,
-  ShoppingCart,
   Plus,
   Document,
   Bell,
@@ -170,7 +169,6 @@ const modules = [
   { name: '生产管理', desc: '生产计划与执行', icon: Shop, path: '/production', gradient: 'linear-gradient(135deg, #8b5cf6, #a78bfa)', status: { type: 'success', text: '正常' }, count: 1234 },
   { name: '项目管理', desc: '项目进度跟踪', icon: FolderOpened, path: '/projects', gradient: 'linear-gradient(135deg, #06b6d4, #22d3ee)', status: { type: 'success', text: '正常' }, count: 23 },
   { name: '缺陷检测', desc: '质量问题追踪', icon: Search, path: '/defects', gradient: 'linear-gradient(135deg, #ec4899, #f472b6)', status: { type: 'danger', text: '紧急' }, count: 5 },
-  { name: '平面库配货', desc: '库存与配送管理', icon: ShoppingCart, path: '/distribution', gradient: 'linear-gradient(135deg, #14b8a6, #2dd4bf)', status: { type: 'success', text: '正常' }, count: 89 },
   { name: 'AI 助手', desc: '智能分析与辅助', icon: MagicStick, path: '/ai', gradient: 'linear-gradient(135deg, #f97316, #fb923c)', status: { type: 'info', text: 'Beta' }, count: 0 },
 ]
 
